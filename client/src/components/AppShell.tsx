@@ -39,7 +39,7 @@ export default function AppShell(): JSX.Element {
         <LeftSidebar isOpen={sidebarOpen} onClose={handleCloseSidebar} />
 
         {/* Scrollable content area: on mobile scrolls main + stacked right sidebar together */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto pt-6">
           {/* Mobile hamburger button — visible only below md breakpoint */}
           <div className="md:hidden flex items-center px-4 py-3 bg-dark-surface border-b border-dark-border">
             <button
