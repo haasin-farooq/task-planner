@@ -199,6 +199,141 @@ describe("AdaptiveLearningEngine", () => {
     expect(model2.totalCompletedTasks).toBe(1);
   });
 
+  it("should clear adjustments across multiple categories on reset", () => {
+    engine.recordCompletion(
+      makeRecord({
+        taskId: "t1",
+        description: "coding",
+        actualTime: 30,
+        estimatedTime: 60,
+      }),
+    );
+    engine.recordCompletion(
+      makeRecord({
+        taskId: "t2",
+        description: "writing",
+        actualTime: 90,
+        estimatedTime: 60,
+      }),
+    );
+    engine.recordCompletion(
+      makeRecord({
+        taskId: "t3",
+        description: "design",
+        actualTime: 60,
+        estimatedTime: 60,
+      }),
+    );
+
+    // Verify data across all three categories
+    let model = engine.getBehavioralModel("user-1");
+    expect(model.totalCompletedTasks).toBe(3);
+    expect(model.adjustments).toHaveLength(3);
+
+    // Reset
+    engine.resetModel("user-1");
+
+    // Verify ALL categories are cleared and model returns to default state
+    model = engine.getBehavioralModel("user-1");
+    expect(model.totalCompletedTasks).toBe(0);
+    expect(model.adjustments).toEqual([]);
+  });
+
+  it("should reflect only post-reset data after recording new completions", () => {
+    // Record pre-reset completions (fast user)
+    for (let i = 0; i < 5; i++) {
+      engine.recordCompletion(
+        makeRecord({
+          taskId: `pre-${i}`,
+          description: "coding",
+          actualTime: 30,
+          estimatedTime: 60,
+          completedAt: new Date(Date.now() + i * 1000),
+        }),
+      );
+    }
+
+    engine.resetModel("user-1");
+
+    // Record post-reset completions (slow user)
+    for (let i = 0; i < 3; i++) {
+      engine.recordCompletion(
+        makeRecord({
+          taskId: `post-${i}`,
+          description: "coding",
+          actualTime: 90,
+          estimatedTime: 60,
+          completedAt: new Date(Date.now() + (i + 10) * 1000),
+        }),
+      );
+    }
+
+    const model = engine.getBehavioralModel("user-1");
+    // Only the 3 post-reset completions should exist
+    expect(model.totalCompletedTasks).toBe(3);
+    expect(model.adjustments).toHaveLength(1);
+    expect(model.adjustments[0].sampleSize).toBe(3);
+    // 90/60 = 1.5 — old 0.5 multiplier should NOT influence this
+    expect(model.adjustments[0].timeMultiplier).toBeCloseTo(1.5, 4);
+  });
+
+  it("should be idempotent when called on a user with no data or called twice", () => {
+    // Reset a user that has never recorded anything — should not throw
+    expect(() => engine.resetModel("no-data-user")).not.toThrow();
+
+    const model = engine.getBehavioralModel("no-data-user");
+    expect(model.totalCompletedTasks).toBe(0);
+    expect(model.adjustments).toEqual([]);
+
+    // Record some data, then reset twice — second reset should be a no-op
+    engine.recordCompletion(
+      makeRecord({ userId: "double-reset", taskId: "t1" }),
+    );
+    engine.resetModel("double-reset");
+    expect(() => engine.resetModel("double-reset")).not.toThrow();
+
+    const model2 = engine.getBehavioralModel("double-reset");
+    expect(model2.totalCompletedTasks).toBe(0);
+    expect(model2.adjustments).toEqual([]);
+  });
+
+  it("should delete completion_history rows from the database on reset", () => {
+    for (let i = 0; i < 3; i++) {
+      engine.recordCompletion(
+        makeRecord({
+          taskId: `t${i}`,
+          completedAt: new Date(Date.now() + i * 1000),
+        }),
+      );
+    }
+
+    // Verify rows exist in completion_history
+    const before = db
+      .prepare(
+        "SELECT COUNT(*) as cnt FROM completion_history WHERE user_id = ?",
+      )
+      .get("user-1") as { cnt: number };
+    expect(before.cnt).toBe(3);
+
+    engine.resetModel("user-1");
+
+    // Verify rows are actually deleted from completion_history
+    const after = db
+      .prepare(
+        "SELECT COUNT(*) as cnt FROM completion_history WHERE user_id = ?",
+      )
+      .get("user-1") as { cnt: number };
+    expect(after.cnt).toBe(0);
+
+    // Also verify behavioral_adjustments rows are deleted
+    const adjAfter = db
+      .prepare(
+        "SELECT COUNT(*) as cnt FROM behavioral_adjustments WHERE user_id = ?",
+      )
+      .get("user-1") as { cnt: number };
+    expect(adjAfter.cnt).toBe(0);
+  });
+
   // --- Multiple users ---
 
   it("should maintain independent models for different users", () => {
