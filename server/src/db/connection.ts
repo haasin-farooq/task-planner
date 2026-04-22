@@ -8,6 +8,7 @@
  */
 
 import Database from "better-sqlite3";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runMigrations } from "./schema.js";
@@ -34,6 +35,10 @@ export function getDb(): Database.Database {
  * Useful for tests that need an isolated in-memory database.
  */
 export function createDb(dbPath: string): Database.Database {
+  if (dbPath !== ":memory:") {
+    const dir = path.dirname(dbPath);
+    fs.mkdirSync(dir, { recursive: true });
+  }
   const db = new Database(dbPath);
   runMigrations(db);
   return db;

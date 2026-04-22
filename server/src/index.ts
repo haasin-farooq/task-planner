@@ -3,6 +3,7 @@
  * and starts the Express server.
  */
 
+import "dotenv/config";
 import { getDb } from "./db/connection.js";
 import { createApp } from "./app.js";
 import { TaskInputParser } from "./services/task-input-parser.js";
