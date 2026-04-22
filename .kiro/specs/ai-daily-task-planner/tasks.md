@@ -25,7 +25,7 @@ This plan implements the AI Daily Task Planner as a full-stack TypeScript applic
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 4.1_
 
 - [ ] 2. Implement core validation and utility functions
-  - [ ] 2.1 Implement metrics validation function
+  - [x] 2.1 Implement metrics validation function
     - Create `server/src/utils/validation.ts`
     - Implement `validateTaskMetrics(metrics: TaskMetrics): boolean` that checks priority in [1,5], difficultyLevel in [1,5], estimatedTime > 0
     - Implement `clampMetrics(metrics: TaskMetrics): TaskMetrics` that clamps out-of-range values
@@ -36,7 +36,7 @@ This plan implements the AI Daily Task Planner as a full-stack TypeScript applic
     - Generate random metric objects with values inside and outside valid ranges; verify validation correctly accepts/rejects
     - **Validates: Requirements 2.1, 2.3, 2.4**
 
-  - [ ] 2.3 Implement effort normalization function
+  - [x] 2.3 Implement effort normalization function
     - Create `server/src/utils/effort-normalization.ts`
     - Implement `normalizeEffort(values: number[]): number[]` that scales an array of positive numbers so they sum to exactly 100
     - Handle edge cases: single task gets 100%, zero values, negative values
@@ -47,7 +47,7 @@ This plan implements the AI Daily Task Planner as a full-stack TypeScript applic
     - Generate random arrays of positive numbers; verify normalized output sums to 100 (±0.01 tolerance)
     - **Validates: Requirements 2.2**
 
-  - [ ] 2.5 Implement dependency validation and cycle detection
+  - [x] 2.5 Implement dependency validation and cycle detection
     - Create `server/src/utils/dependency-graph.ts`
     - Implement `validateDependencyRefs(tasks: AnalyzedTask[]): string[]` that returns invalid dependency IDs
     - Implement `detectCycles(tasks: AnalyzedTask[]): CircularDependencyError[]` using DFS-based cycle detection
@@ -69,7 +69,7 @@ This plan implements the AI Daily Task Planner as a full-stack TypeScript applic
     - Generate random DAGs with some tasks completed; verify unblocked set is exactly those tasks whose every dependency is completed
     - **Validates: Requirements 8.4**
 
-- [ ] 3. Checkpoint
+- [x] 3. Checkpoint
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 4. Implement Task Organizer (client-side sorting)
