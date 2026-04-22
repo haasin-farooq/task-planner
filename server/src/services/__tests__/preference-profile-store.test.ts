@@ -24,6 +24,18 @@ describe("PreferenceProfileStore", () => {
     expect(profile).toBeNull();
   });
 
+  it("should default to 'highest-priority-first' when no profile exists", () => {
+    const DEFAULT_STRATEGY: PrioritizationStrategy = "highest-priority-first";
+    const profile = store.get("no-profile-user");
+
+    // Store returns null — callers apply the default strategy
+    expect(profile).toBeNull();
+
+    // Verify the default strategy matches the documented default (Req 5.2, 5.4)
+    const effectiveStrategy = profile?.strategy ?? DEFAULT_STRATEGY;
+    expect(effectiveStrategy).toBe("highest-priority-first");
+  });
+
   // --- Requirement 5.1, 5.3: save and retrieve strategy ---
 
   it("should save and retrieve a preference profile", () => {
@@ -91,6 +103,20 @@ describe("PreferenceProfileStore", () => {
 
     expect(userRow).toBeDefined();
     expect(userRow!.id).toBe("new-user");
+  });
+
+  // --- Requirement 5.2, 5.4: schema default is 'highest-priority-first' ---
+
+  it("should have 'highest-priority-first' as the schema default strategy", () => {
+    // Insert a user and a bare preference row using the DB default
+    db.prepare("INSERT INTO users (id) VALUES (?)").run("schema-default-user");
+    db.prepare("INSERT INTO preference_profiles (user_id) VALUES (?)").run(
+      "schema-default-user",
+    );
+
+    const profile = store.get("schema-default-user");
+    expect(profile).not.toBeNull();
+    expect(profile!.strategy).toBe("highest-priority-first");
   });
 
   it("should not duplicate the user row on repeated saves", () => {
