@@ -14,13 +14,13 @@ This plan implements the AI Daily Task Planner as a full-stack TypeScript applic
     - Install dev dependencies: vitest, fast-check, @testing-library/react
     - _Requirements: N/A (scaffolding)_
 
-  - [ ] 1.2 Create SQLite database schema and migration script
+  - [x] 1.2 Create SQLite database schema and migration script
     - Implement `server/src/db/schema.ts` with all CREATE TABLE statements from the design (users, preference_profiles, task_sessions, tasks, task_dependencies, completion_history, behavioral_adjustments)
     - Create `server/src/db/connection.ts` for database initialization and connection management
     - Include all CHECK constraints (priority 1-5, difficulty 1-5, effort 0-100)
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
 
-  - [ ] 1.3 Define shared TypeScript interfaces and types
+  - [x] 1.3 Define shared TypeScript interfaces and types
     - Create `server/src/types/index.ts` with all interfaces from the design: ParsedTask, ParseResult, TaskMetrics, AnalyzedTask, AnalysisResult, CompletionRecord, BehavioralModel, CategoryAdjustment, AnalyticsSummary, DailyCompletionStat, DifficultyBreakdown, PerformanceCategory, PreferenceProfile, PrioritizationStrategy
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 4.1_
 

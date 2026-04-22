@@ -1,0 +1,79 @@
+/**
+ * SQLite database schema and migration for the AI Daily Task Planner.
+ *
+ * All CREATE TABLE statements match the design document. CHECK constraints
+ * enforce valid ranges for priority (1-5), difficulty (1-5), and effort (0-100).
+ */
+
+export const SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS preference_profiles (
+  user_id TEXT PRIMARY KEY REFERENCES users(id),
+  strategy TEXT NOT NULL DEFAULT 'highest-priority-first',
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS task_sessions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  raw_input TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS tasks (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES task_sessions(id),
+  description TEXT NOT NULL,
+  raw_text TEXT NOT NULL,
+  is_ambiguous BOOLEAN DEFAULT FALSE,
+  priority INTEGER CHECK (priority BETWEEN 1 AND 5),
+  effort_percentage REAL CHECK (effort_percentage BETWEEN 0 AND 100),
+  difficulty_level INTEGER CHECK (difficulty_level BETWEEN 1 AND 5),
+  estimated_time INTEGER,
+  is_completed BOOLEAN DEFAULT FALSE,
+  actual_time INTEGER,
+  completed_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS task_dependencies (
+  task_id TEXT NOT NULL REFERENCES tasks(id),
+  depends_on_task_id TEXT NOT NULL REFERENCES tasks(id),
+  PRIMARY KEY (task_id, depends_on_task_id)
+);
+
+CREATE TABLE IF NOT EXISTS completion_history (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  task_description TEXT NOT NULL,
+  category TEXT,
+  estimated_time INTEGER NOT NULL,
+  actual_time INTEGER NOT NULL,
+  difficulty_level INTEGER NOT NULL,
+  completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS behavioral_adjustments (
+  user_id TEXT NOT NULL REFERENCES users(id),
+  category TEXT NOT NULL,
+  time_multiplier REAL NOT NULL DEFAULT 1.0,
+  difficulty_adjustment REAL NOT NULL DEFAULT 0.0,
+  sample_size INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, category)
+);
+`;
+
+/**
+ * Run the schema migration against the given database instance.
+ * Uses `exec` so all statements run in a single call.
+ */
+export function runMigrations(db: import("better-sqlite3").Database): void {
+  db.pragma("journal_mode = WAL");
+  db.pragma("foreign_keys = ON");
+  db.exec(SCHEMA_SQL);
+}
