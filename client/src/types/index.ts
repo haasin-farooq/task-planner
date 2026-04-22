@@ -34,3 +34,32 @@ export interface TaskMetrics {
 export interface AnalyzedTask extends ParsedTask {
   metrics: TaskMetrics;
 }
+
+// --- Analytics ---
+
+export interface DailyCompletionStat {
+  date: string;
+  tasksCompleted: number;
+  avgActualTime: number;
+  avgEstimatedTime: number;
+}
+
+export interface DifficultyBreakdown {
+  difficultyLevel: number;
+  count: number;
+}
+
+export interface PerformanceCategory {
+  category: string;
+  avgActualTime: number;
+  avgEstimatedTime: number;
+  label: "strength" | "area-for-improvement";
+}
+
+export interface AnalyticsSummary {
+  dailyStats: DailyCompletionStat[];
+  difficultyBreakdown: DifficultyBreakdown[];
+  performanceCategories: PerformanceCategory[];
+  dailyProgressPercent: number;
+  insufficientData: boolean;
+}
