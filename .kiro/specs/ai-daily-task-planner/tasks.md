@@ -82,12 +82,12 @@ This plan implements the AI Daily Task Planner as a full-stack TypeScript applic
     - Implement "dependency-aware": topological sort respecting dependency edges
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6_
 
-  - [ ]\* 4.2 Write property test for strategy-based sorting (Property 5)
+  - [x] 4.2 Write property test for strategy-based sorting (Property 5)
     - **Property 5: Strategy-based sorting correctness**
     - Generate random task arrays with random metrics; for each of the three simple strategies, verify output is correctly ordered with priority tiebreaker
     - **Validates: Requirements 4.1, 4.2, 4.3, 4.4, 4.6**
 
-  - [ ]\* 4.3 Write property test for dependency-aware ordering (Property 6)
+  - [x] 4.3 Write property test for dependency-aware ordering (Property 6)
     - **Property 6: Dependency-aware ordering respects dependencies**
     - Generate random DAGs; verify output is a valid topological sort where no task appears before its dependencies
     - **Validates: Requirements 4.5**
@@ -100,12 +100,12 @@ This plan implements the AI Daily Task Planner as a full-stack TypeScript applic
     - Default to "highest-priority-first" when no profile exists
     - _Requirements: 5.1, 5.2, 5.3, 5.4_
 
-  - [ ]\* 5.2 Write property test for preference round-trip (Property 7)
+  - [x] 5.2 Write property test for preference round-trip (Property 7)
     - **Property 7: Preference profile round-trip**
     - Generate random valid strategies; save then load and verify the returned strategy matches
     - **Validates: Requirements 5.1, 5.3**
 
-  - [ ]\* 5.3 Write unit tests for preference defaults
+  - [x] 5.3 Write unit tests for preference defaults
     - Test that `get()` returns null for non-existent user
     - Test that default strategy is "highest-priority-first" when no profile exists
     - _Requirements: 5.2, 5.4_
@@ -120,12 +120,12 @@ This plan implements the AI Daily Task Planner as a full-stack TypeScript applic
     - Only apply adjustments when sampleSize >= 10
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
 
-  - [ ]\* 6.2 Write property test for adaptive learning adjustment direction (Property 8)
+  - [x] 6.2 Write property test for adaptive learning adjustment direction (Property 8)
     - **Property 8: Adaptive learning adjustment direction**
     - Generate sequences of completion records where user is consistently faster or slower; verify timeMultiplier direction is correct and only applied when 10+ tasks completed
     - **Validates: Requirements 6.2, 6.3, 6.4, 6.5**
 
-  - [ ]\* 6.3 Write unit test for model reset
+  - [x] 6.3 Write unit test for model reset
     - Test that resetModel clears all adjustments and reverts to defaults
     - _Requirements: 6.6_
 
@@ -179,13 +179,13 @@ This plan implements the AI Daily Task Planner as a full-stack TypeScript applic
     - Strip invalid dependency references, flag circular dependencies
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 6.3_
 
-  - [ ]\* 9.3 Write unit tests for TaskInputParser
+  - [x] 9.3 Write unit tests for TaskInputParser
     - Test empty input returns error
     - Test that parsed results contain expected fields
     - Test retry logic on malformed LLM response (mock OpenAI client)
     - _Requirements: 1.1, 1.2, 1.3_
 
-  - [ ]\* 9.4 Write unit tests for TaskAnalyzer
+  - [x] 9.4 Write unit tests for TaskAnalyzer
     - Test metrics clamping and normalization on mock LLM output
     - Test circular dependency flagging
     - Test behavioral model integration

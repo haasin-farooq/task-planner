@@ -199,6 +199,88 @@ describe("AdaptiveLearningEngine", () => {
     expect(model2.totalCompletedTasks).toBe(1);
   });
 
+  it("should revert to default model state after reset (Req 6.6)", () => {
+    // Build up a non-trivial model across multiple categories
+    for (let i = 0; i < 12; i++) {
+      engine.recordCompletion(
+        makeRecord({
+          taskId: `coding-${i}`,
+          description: "coding",
+          actualTime: 30,
+          estimatedTime: 60,
+          completedAt: new Date(Date.now() + i * 1000),
+        }),
+      );
+    }
+    for (let i = 0; i < 8; i++) {
+      engine.recordCompletion(
+        makeRecord({
+          taskId: `writing-${i}`,
+          description: "writing",
+          actualTime: 90,
+          estimatedTime: 60,
+          completedAt: new Date(Date.now() + (12 + i) * 1000),
+        }),
+      );
+    }
+
+    // Verify model has accumulated data
+    let model = engine.getBehavioralModel("user-1");
+    expect(model.totalCompletedTasks).toBe(20);
+    expect(model.adjustments).toHaveLength(2);
+
+    // Reset
+    engine.resetModel("user-1");
+
+    // After reset the model should match a brand-new user's defaults
+    model = engine.getBehavioralModel("user-1");
+    expect(model.userId).toBe("user-1");
+    expect(model.totalCompletedTasks).toBe(0);
+    expect(model.adjustments).toEqual([]);
+  });
+
+  it("should allow fresh data accumulation after reset without prior contamination (Req 6.6)", () => {
+    // Record completions where user is consistently faster (multiplier < 1)
+    for (let i = 0; i < 5; i++) {
+      engine.recordCompletion(
+        makeRecord({
+          taskId: `pre-${i}`,
+          description: "coding",
+          actualTime: 30,
+          estimatedTime: 60,
+          completedAt: new Date(Date.now() + i * 1000),
+        }),
+      );
+    }
+
+    // Reset the model
+    engine.resetModel("user-1");
+
+    // Now record completions where user is consistently slower (multiplier > 1)
+    for (let i = 0; i < 3; i++) {
+      engine.recordCompletion(
+        makeRecord({
+          taskId: `post-${i}`,
+          description: "coding",
+          actualTime: 120,
+          estimatedTime: 60,
+          completedAt: new Date(Date.now() + (10 + i) * 1000),
+        }),
+      );
+    }
+
+    const model = engine.getBehavioralModel("user-1");
+    expect(model.totalCompletedTasks).toBe(3);
+    expect(model.adjustments).toHaveLength(1);
+
+    const adj = model.adjustments[0];
+    // All 3 post-reset records: 120/60 = 2.0 each → average = 2.0
+    // If prior data leaked, the multiplier would be pulled toward < 1
+    expect(adj.timeMultiplier).toBeCloseTo(2.0, 4);
+    expect(adj.difficultyAdjustment).toBeCloseTo(1.0, 4);
+    expect(adj.sampleSize).toBe(3);
+  });
+
   // --- Multiple users ---
 
   it("should maintain independent models for different users", () => {
