@@ -215,7 +215,7 @@ This plan implements the AI Daily Task Planner as a full-stack TypeScript applic
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 12. Implement React frontend components
-  - [ ] 12.1 Create Task Input UI component
+  - [x] 12.1 Create Task Input UI component
     - Create `client/src/components/TaskInput.tsx`
     - Implement text area for raw task input with submit button
     - Call `POST /api/tasks/parse` on submit
@@ -223,21 +223,21 @@ This plan implements the AI Daily Task Planner as a full-stack TypeScript applic
     - Show error message when no tasks detected
     - _Requirements: 1.1, 1.2, 1.3, 1.4_
 
-  - [ ] 12.2 Create Metrics Display component
+  - [x] 12.2 Create Metrics Display component
     - Create `client/src/components/MetricsDisplay.tsx`
     - Display priority, effort percentage, dependency count, difficulty level, and estimated time for each task
     - Show dependency list on task selection
     - Visually distinguish completed tasks (strikethrough or dimmed styling)
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 8.1_
 
-  - [ ] 12.3 Create Strategy Selector component
+  - [x] 12.3 Create Strategy Selector component
     - Create `client/src/components/StrategySelector.tsx`
     - Render dropdown or button group for the 4 prioritization strategies
     - Load saved preference on mount via `GET /api/preferences/:userId`
     - On strategy change, save via `PUT /api/preferences/:userId` and re-sort task list client-side using TaskOrganizer
     - _Requirements: 4.1, 4.7, 5.1, 5.2, 5.3, 5.4_
 
-  - [ ] 12.4 Create Analytics Dashboard component
+  - [x] 12.4 Create Analytics Dashboard component
     - Create `client/src/components/AnalyticsDashboard.tsx`
     - Fetch analytics via `GET /api/analytics/:userId` with date range selector
     - Display daily completion chart, average time comparison, difficulty breakdown
@@ -245,7 +245,7 @@ This plan implements the AI Daily Task Planner as a full-stack TypeScript applic
     - Show "insufficient data" message when fewer than 5 tasks
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.7_
 
-  - [ ] 12.5 Create Progress and Completion components
+  - [x] 12.5 Create Progress and Completion components
     - Create `client/src/components/ProgressIndicator.tsx` — shows daily progress percentage bar
     - Create `client/src/components/CompletionDialog.tsx` — prompts for actual time when marking task complete
     - On task completion: call `PATCH /api/tasks/:taskId/complete`, update progress indicator, show unblocked tasks notification
