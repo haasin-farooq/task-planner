@@ -268,7 +268,7 @@ This plan implements the AI Daily Task Planner as a full-stack TypeScript applic
     - Add state management for current session, tasks, and active strategy
     - _Requirements: 1.4, 4.1, 5.2_
 
-  - [ ] 13.2 Create server entry point and connect all services
+  - [x] 13.2 Create server entry point and connect all services
     - Create `server/src/index.ts` — initializes database, registers routes, starts Express server
     - Wire TaskInputParser, TaskAnalyzer, TaskOrganizer, AdaptiveLearningEngine, AnalyticsAggregator, PreferenceProfileStore into route handlers
     - Add CORS configuration for frontend-backend communication
@@ -280,7 +280,7 @@ This plan implements the AI Daily Task Planner as a full-stack TypeScript applic
     - Test analytics flow: multiple completions → query analytics → verify summary
     - _Requirements: 1.1, 1.4, 2.1, 6.1, 7.1, 8.4_
 
-- [ ] 14. Final checkpoint
+- [x] 14. Final checkpoint
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes
