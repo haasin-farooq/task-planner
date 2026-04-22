@@ -162,7 +162,7 @@ This plan implements the AI Daily Task Planner as a full-stack TypeScript applic
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 9. Implement Task Input Parser and Task Analyzer (LLM integration)
-  - [ ] 9.1 Implement TaskInputParser with LLM-based text parsing
+  - [x] 9.1 Implement TaskInputParser with LLM-based text parsing
     - Create `server/src/services/task-input-parser.ts`
     - Implement `parse(rawText: string): Promise<ParseResult>` — sends raw text to OpenAI with a structured prompt requesting JSON output
     - Handle empty/whitespace input by returning error message "No tasks detected. Please enter at least one task."
@@ -170,7 +170,7 @@ This plan implements the AI Daily Task Planner as a full-stack TypeScript applic
     - Implement retry logic for malformed LLM responses (1 retry with stricter prompt)
     - _Requirements: 1.1, 1.2, 1.3_
 
-  - [ ] 9.2 Implement TaskAnalyzer with LLM-based metric assignment
+  - [x] 9.2 Implement TaskAnalyzer with LLM-based metric assignment
     - Create `server/src/services/task-analyzer.ts`
     - Implement `analyze(tasks: ParsedTask[], userId: string): Promise<AnalysisResult>` — fetches behavioral model, sends tasks to OpenAI with adjustment context, validates and normalizes returned metrics
     - Use `validateTaskMetrics` and `clampMetrics` from validation utils
