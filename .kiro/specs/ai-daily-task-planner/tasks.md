@@ -205,7 +205,7 @@ This plan implements the AI Daily Task Planner as a full-stack TypeScript applic
     - Add input validation and error handling for all endpoints
     - _Requirements: 1.1, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 5.1, 5.3, 6.1, 6.6, 7.1, 8.4_
 
-  - [ ]\* 10.2 Write unit tests for API endpoints
+  - [x] 10.2 Write unit tests for API endpoints
     - Test each endpoint with valid and invalid inputs using supertest
     - Test error responses for missing/invalid parameters
     - Test that PATCH complete returns unblocked tasks
@@ -252,7 +252,7 @@ This plan implements the AI Daily Task Planner as a full-stack TypeScript applic
     - Show completion summary when all tasks are done (total time spent vs total estimated)
     - _Requirements: 6.1, 7.6, 8.1, 8.2, 8.3, 8.4_
 
-  - [ ]\* 12.6 Write unit tests for frontend components
+  - [x] 12.6 Write unit tests for frontend components
     - Test TaskInput renders and submits correctly
     - Test MetricsDisplay shows all metric fields
     - Test StrategySelector loads saved preference and triggers re-sort
@@ -274,7 +274,7 @@ This plan implements the AI Daily Task Planner as a full-stack TypeScript applic
     - Add CORS configuration for frontend-backend communication
     - _Requirements: N/A (wiring)_
 
-  - [ ]\* 13.3 Write integration tests for end-to-end flows
+  - [ ] 13.3 Write integration tests for end-to-end flows
     - Test parsing flow: raw text → parse → review → analyze → display
     - Test completion flow: mark complete → record time → update model → check unblocked
     - Test analytics flow: multiple completions → query analytics → verify summary

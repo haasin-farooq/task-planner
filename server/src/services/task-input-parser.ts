@@ -159,7 +159,11 @@ export class TaskInputParser {
       }
 
       return this.validateLLMResponse(parsed);
-    } catch {
+    } catch (error) {
+      console.error(
+        "[TaskInputParser] LLM call failed:",
+        error instanceof Error ? error.message : error,
+      );
       return null;
     }
   }
