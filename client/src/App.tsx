@@ -1,16 +1,10 @@
-import { useState, useCallback } from "react";
-import {
-  BrowserRouter,
-  Routes,
-  Route,
-  Link,
-  useLocation,
-} from "react-router-dom";
+import { useState, useCallback, createContext, useContext } from "react";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
+import AppShell from "./components/AppShell";
 import TaskInput from "./components/TaskInput";
 import MetricsDisplay from "./components/MetricsDisplay";
 import StrategySelector from "./components/StrategySelector";
-import ProgressIndicator from "./components/ProgressIndicator";
 import CompletionDialog from "./components/CompletionDialog";
 import CompletionSummary from "./components/CompletionSummary";
 import UnblockedNotification from "./components/UnblockedNotification";
@@ -34,61 +28,35 @@ const USER_ID = "default-user";
 type AppPhase = "input" | "analyzing" | "tasks";
 
 // ---------------------------------------------------------------------------
-// Navigation bar (shared across routes)
+// Shared task data context — lets PlannerView share state with AppShell
 // ---------------------------------------------------------------------------
 
-function NavBar() {
-  const location = useLocation();
-  const isAnalytics = location.pathname === "/analytics";
+export interface TaskDataContextValue {
+  tasks: AnalyzedTask[];
+  completedTaskIds: Set<string>;
+}
 
-  return (
-    <nav
-      aria-label="Main navigation"
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        padding: "0.75rem 1.5rem",
-        borderBottom: "1px solid #e5e7eb",
-        marginBottom: "1.5rem",
-      }}
-    >
-      <Link
-        to="/"
-        style={{
-          textDecoration: "none",
-          color: "#111827",
-          fontSize: "1.25rem",
-          fontWeight: 700,
-        }}
-      >
-        AI Daily Task Planner
-      </Link>
+export const TaskDataContext = createContext<TaskDataContextValue>({
+  tasks: [],
+  completedTaskIds: new Set(),
+});
 
-      <Link
-        to={isAnalytics ? "/" : "/analytics"}
-        aria-label={isAnalytics ? "Back to tasks" : "View analytics"}
-        style={{
-          padding: "0.5rem 1rem",
-          borderRadius: "0.375rem",
-          border: "1px solid #d1d5db",
-          backgroundColor: "#ffffff",
-          textDecoration: "none",
-          color: "#374151",
-          fontWeight: 500,
-        }}
-      >
-        {isAnalytics ? "← Tasks" : "Analytics"}
-      </Link>
-    </nav>
-  );
+export function useTaskData(): TaskDataContextValue {
+  return useContext(TaskDataContext);
 }
 
 // ---------------------------------------------------------------------------
 // Main planner view
 // ---------------------------------------------------------------------------
 
-function PlannerView() {
+interface PlannerViewProps {
+  onTaskDataChange: (
+    tasks: AnalyzedTask[],
+    completedTaskIds: Set<string>,
+  ) => void;
+}
+
+function PlannerView({ onTaskDataChange }: PlannerViewProps) {
   // --- Phase / flow state ---
   const [phase, setPhase] = useState<AppPhase>("input");
 
@@ -120,23 +88,29 @@ function PlannerView() {
   // Step 1 → 2: User confirms parsed tasks → analyze them
   // -------------------------------------------------------------------
 
-  const handleTasksConfirmed = useCallback(async (parsed: ParsedTask[]) => {
-    setPhase("analyzing");
-    setAnalyzeError(null);
+  const handleTasksConfirmed = useCallback(
+    async (parsed: ParsedTask[]) => {
+      setPhase("analyzing");
+      setAnalyzeError(null);
 
-    try {
-      const result = await analyzeTasks(parsed, USER_ID);
+      try {
+        const result = await analyzeTasks(parsed, USER_ID);
 
-      setSessionId(result.sessionId);
-      setTasks(result.tasks);
-      setCompletedTaskIds(new Set());
-      setActualTimes(new Map());
-      setPhase("tasks");
-    } catch {
-      setAnalyzeError("Failed to analyze tasks. Please try again.");
-      setPhase("input");
-    }
-  }, []);
+        setSessionId(result.sessionId);
+        setTasks(result.tasks);
+        setCompletedTaskIds(new Set());
+        setActualTimes(new Map());
+        setPhase("tasks");
+
+        // Notify parent of new task data
+        onTaskDataChange(result.tasks, new Set());
+      } catch {
+        setAnalyzeError("Failed to analyze tasks. Please try again.");
+        setPhase("input");
+      }
+    },
+    [onTaskDataChange],
+  );
 
   // -------------------------------------------------------------------
   // Strategy change → re-sort tasks client-side (Req 4.1)
@@ -146,8 +120,9 @@ function PlannerView() {
     (sorted: AnalyzedTask[], strategy: PrioritizationStrategy) => {
       setTasks(sorted);
       setActiveStrategy(strategy);
+      onTaskDataChange(sorted, completedTaskIds);
     },
-    [],
+    [onTaskDataChange, completedTaskIds],
   );
 
   // -------------------------------------------------------------------
@@ -168,15 +143,19 @@ function PlannerView() {
       actualTime: number,
       newlyUnblocked: { id: string; description: string }[],
     ) => {
-      setCompletedTaskIds((prev) => new Set(prev).add(taskId));
+      const newCompleted = new Set(completedTaskIds).add(taskId);
+      setCompletedTaskIds(newCompleted);
       setActualTimes((prev) => new Map(prev).set(taskId, actualTime));
       setCompletingTask(null);
 
       if (newlyUnblocked.length > 0) {
         setUnblockedTasks(newlyUnblocked);
       }
+
+      // Notify parent of updated completion state
+      onTaskDataChange(tasks, newCompleted);
     },
-    [],
+    [onTaskDataChange, tasks, completedTaskIds],
   );
 
   const handleCompletionCancelled = useCallback(() => {
@@ -198,7 +177,8 @@ function PlannerView() {
     setCompletedTaskIds(new Set());
     setActualTimes(new Map());
     setAnalyzeError(null);
-  }, []);
+    onTaskDataChange([], new Set());
+  }, [onTaskDataChange]);
 
   // -------------------------------------------------------------------
   // Derived state
@@ -212,17 +192,24 @@ function PlannerView() {
   // -------------------------------------------------------------------
 
   return (
-    <main style={{ maxWidth: "48rem", margin: "0 auto", padding: "0 1rem" }}>
+    <div className="max-w-3xl mx-auto px-4">
+      {/* Main content area header */}
+      <div className="mb-8 pt-2">
+        <h1 className="text-3xl font-bold text-white">
+          Plan your day intelligently
+        </h1>
+        <p className="text-gray-400 mt-2">
+          Enter your rough tasks and let AI structure them into a prioritized
+          plan.
+        </p>
+      </div>
+
       {/* Phase: input */}
       {phase === "input" && (
         <>
           <TaskInput onConfirm={handleTasksConfirmed} />
           {analyzeError && (
-            <p
-              role="alert"
-              aria-live="assertive"
-              style={{ color: "#dc2626", marginTop: "0.5rem" }}
-            >
+            <p role="alert" aria-live="assertive" className="text-red-500 mt-2">
               {analyzeError}
             </p>
           )}
@@ -231,10 +218,7 @@ function PlannerView() {
 
       {/* Phase: analyzing */}
       {phase === "analyzing" && (
-        <p
-          aria-live="polite"
-          style={{ textAlign: "center", padding: "2rem 0" }}
-        >
+        <p aria-live="polite" className="text-center py-8 text-gray-300">
           Analyzing your tasks…
         </p>
       )}
@@ -247,12 +231,6 @@ function PlannerView() {
             <CompletionSummary tasks={tasks} actualTimes={actualTimes} />
           )}
 
-          {/* Progress indicator (Req 7.6, 8.2) */}
-          <ProgressIndicator
-            tasks={tasks}
-            completedTaskIds={completedTaskIds}
-          />
-
           {/* Strategy selector (Req 4.1, 5.2) */}
           <StrategySelector
             userId={USER_ID}
@@ -261,14 +239,7 @@ function PlannerView() {
           />
 
           {/* Active strategy label for screen readers */}
-          <p
-            aria-live="polite"
-            style={{
-              fontSize: "0.75rem",
-              color: "#9ca3af",
-              margin: "0.25rem 0 0.75rem",
-            }}
-          >
+          <p aria-live="polite" className="text-xs text-gray-400 mt-1 mb-3">
             Sorted by: {activeStrategy.replace(/-/g, " ")}
           </p>
 
@@ -280,17 +251,11 @@ function PlannerView() {
           />
 
           {/* Start over button */}
-          <div style={{ marginTop: "1.5rem", textAlign: "center" }}>
+          <div className="mt-6 text-center">
             <button
               onClick={handleStartOver}
               aria-label="Start over with new tasks"
-              style={{
-                padding: "0.5rem 1.5rem",
-                borderRadius: "0.375rem",
-                border: "1px solid #d1d5db",
-                backgroundColor: "#ffffff",
-                cursor: "pointer",
-              }}
+              className="px-6 py-2 rounded-md border border-dark-border bg-dark-card text-gray-300 hover:bg-dark-surface cursor-pointer transition-colors"
             >
               Start Over
             </button>
@@ -314,7 +279,7 @@ function PlannerView() {
           onDismiss={handleDismissUnblocked}
         />
       )}
-    </main>
+    </div>
   );
 }
 
@@ -324,25 +289,71 @@ function PlannerView() {
 
 function AnalyticsView() {
   return (
-    <main style={{ maxWidth: "48rem", margin: "0 auto", padding: "0 1rem" }}>
+    <div className="max-w-3xl mx-auto px-4">
       <AnalyticsDashboard userId={USER_ID} />
-    </main>
+    </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Root App with routing
+// Placeholder views for new routes
+// ---------------------------------------------------------------------------
+
+function InsightsView() {
+  return (
+    <div className="max-w-3xl mx-auto px-4 py-8">
+      <h1 className="text-2xl font-bold text-white mb-2">Insights</h1>
+      <p className="text-gray-400">
+        Insights and recommendations will appear here in a future update.
+      </p>
+    </div>
+  );
+}
+
+function PreferencesView() {
+  return (
+    <div className="max-w-3xl mx-auto px-4 py-8">
+      <h1 className="text-2xl font-bold text-white mb-2">Preferences</h1>
+      <p className="text-gray-400">
+        User preferences and settings will be available here in a future update.
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Root App with routing — AppShell as layout route
 // ---------------------------------------------------------------------------
 
 function App() {
+  const [taskData, setTaskData] = useState<TaskDataContextValue>({
+    tasks: [],
+    completedTaskIds: new Set(),
+  });
+
+  const handleTaskDataChange = useCallback(
+    (tasks: AnalyzedTask[], completedTaskIds: Set<string>) => {
+      setTaskData({ tasks, completedTaskIds });
+    },
+    [],
+  );
+
   return (
-    <BrowserRouter>
-      <NavBar />
-      <Routes>
-        <Route path="/" element={<PlannerView />} />
-        <Route path="/analytics" element={<AnalyticsView />} />
-      </Routes>
-    </BrowserRouter>
+    <TaskDataContext.Provider value={taskData}>
+      <BrowserRouter>
+        <Routes>
+          <Route element={<AppShell />}>
+            <Route
+              path="/"
+              element={<PlannerView onTaskDataChange={handleTaskDataChange} />}
+            />
+            <Route path="/analytics" element={<AnalyticsView />} />
+            <Route path="/insights" element={<InsightsView />} />
+            <Route path="/preferences" element={<PreferencesView />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </TaskDataContext.Provider>
   );
 }
 
