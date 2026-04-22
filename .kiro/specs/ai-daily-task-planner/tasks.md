@@ -73,7 +73,7 @@ This plan implements the AI Daily Task Planner as a full-stack TypeScript applic
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 4. Implement Task Organizer (client-side sorting)
-  - [ ] 4.1 Implement TaskOrganizer with all four prioritization strategies
+  - [x] 4.1 Implement TaskOrganizer with all four prioritization strategies
     - Create `client/src/utils/task-organizer.ts`
     - Implement `orderTasks(tasks: AnalyzedTask[], strategy: PrioritizationStrategy): AnalyzedTask[]`
     - Implement "least-effort-first": ascending by effortPercentage, tiebreak by descending priority
@@ -92,8 +92,8 @@ This plan implements the AI Daily Task Planner as a full-stack TypeScript applic
     - Generate random DAGs; verify output is a valid topological sort where no task appears before its dependencies
     - **Validates: Requirements 4.5**
 
-- [ ] 5. Implement Preference Profile Store
-  - [ ] 5.1 Implement PreferenceProfileStore with SQLite persistence
+- [x] 5. Implement Preference Profile Store
+  - [x] 5.1 Implement PreferenceProfileStore with SQLite persistence
     - Create `server/src/services/preference-profile-store.ts`
     - Implement `get(userId: string): PreferenceProfile | null` — returns saved profile or null
     - Implement `save(userId: string, strategy: PrioritizationStrategy): void` — upserts preference
