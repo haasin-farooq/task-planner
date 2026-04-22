@@ -117,15 +117,19 @@ export default function StrategySelector({
   // -------------------------------------------------------------------
   return (
     <section aria-label="Prioritization strategy">
-      <h3>Sort Strategy</h3>
+      <h3 className="text-sm font-semibold text-gray-300 mb-2">
+        Sort Strategy
+      </h3>
 
       {loading ? (
-        <p aria-live="polite">Loading preference…</p>
+        <p className="text-sm text-gray-400" aria-live="polite">
+          Loading preference…
+        </p>
       ) : (
         <div
           role="group"
           aria-label="Prioritization strategies"
-          style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}
+          className="flex flex-wrap gap-2"
         >
           {STRATEGIES.map(({ value, label }) => {
             const isActive = value === activeStrategy;
@@ -136,15 +140,13 @@ export default function StrategySelector({
                 disabled={saving}
                 aria-pressed={isActive}
                 aria-label={`Sort by ${label}`}
-                style={{
-                  padding: "0.5rem 1rem",
-                  borderRadius: "0.375rem",
-                  border: isActive ? "2px solid #3b82f6" : "1px solid #d1d5db",
-                  backgroundColor: isActive ? "#eff6ff" : "#ffffff",
-                  fontWeight: isActive ? 600 : 400,
-                  cursor: saving ? "not-allowed" : "pointer",
-                  opacity: saving ? 0.6 : 1,
-                }}
+                className={[
+                  "px-3 py-2 rounded-md text-sm transition-colors",
+                  isActive
+                    ? "border-2 border-accent bg-accent/20 text-white font-semibold"
+                    : "border border-dark-border bg-dark-card text-gray-300 hover:bg-dark-surface hover:text-white",
+                  saving ? "cursor-not-allowed opacity-60" : "cursor-pointer",
+                ].join(" ")}
               >
                 {label}
               </button>
@@ -154,7 +156,7 @@ export default function StrategySelector({
       )}
 
       {saving && (
-        <p aria-live="polite" style={{ fontSize: "0.75rem", color: "#6b7280" }}>
+        <p className="text-xs text-gray-500 mt-1" aria-live="polite">
           Saving…
         </p>
       )}
@@ -163,7 +165,7 @@ export default function StrategySelector({
         <p
           role="alert"
           aria-live="assertive"
-          style={{ color: "#dc2626", fontSize: "0.875rem" }}
+          className="text-sm text-red-400 mt-1"
         >
           {error}
         </p>

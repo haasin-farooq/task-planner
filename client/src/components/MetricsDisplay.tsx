@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { AnalyzedTask } from "../types";
+import TaskCard from "./TaskCard";
 
 export interface MetricsDisplayProps {
   /** Analyzed tasks to display with their metrics. */
@@ -13,13 +14,13 @@ export interface MetricsDisplayProps {
 /**
  * Metrics Display component.
  *
- * Renders each analyzed task with its AI-assigned metrics:
+ * Renders each analyzed task as a TaskCard with its AI-assigned metrics:
  * priority, effort percentage, dependency count, difficulty level,
  * and estimated time. Selecting a task with dependencies reveals
  * the full dependency list. Completed tasks are visually dimmed
  * with a strikethrough description.
  *
- * Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 8.1
+ * Requirements: 4.4, 6.3, 6.4, 8.3, 11.2
  */
 export default function MetricsDisplay({
   tasks,
@@ -31,7 +32,7 @@ export default function MetricsDisplay({
   if (tasks.length === 0) {
     return (
       <section aria-label="Task metrics">
-        <p>No tasks to display.</p>
+        <p className="text-gray-400">No tasks to display.</p>
       </section>
     );
   }
@@ -45,10 +46,18 @@ export default function MetricsDisplay({
 
   return (
     <section aria-label="Task metrics">
-      <h2>Your Tasks</h2>
+      {/* Parsed tasks header with Sort by dropdown integration — Req 6.3 */}
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-gray-100">Parsed tasks</h2>
+        <span className="text-sm text-gray-400">Sort by</span>
+      </div>
 
-      <ul role="list" aria-label="Analyzed task list">
-        {tasks.map((task) => {
+      <ul
+        role="list"
+        aria-label="Analyzed task list"
+        className="flex flex-col gap-3"
+      >
+        {tasks.map((task, idx) => {
           const isCompleted = completedTaskIds.has(task.id);
           const isSelected = selectedTaskId === task.id;
           const dependencyCount = task.metrics.dependsOn.length;
@@ -58,14 +67,11 @@ export default function MetricsDisplay({
               key={task.id}
               data-testid={`metrics-task-${task.id}`}
               aria-current={isSelected ? "true" : undefined}
-              style={{
-                opacity: isCompleted ? 0.5 : 1,
-                cursor: "pointer",
-                padding: "0.75rem",
-                marginBottom: "0.5rem",
-                border: isSelected ? "2px solid #3b82f6" : "1px solid #e5e7eb",
-                borderRadius: "0.5rem",
-              }}
+              className={`cursor-pointer rounded-lg border p-3 transition-colors ${
+                isSelected
+                  ? "border-accent bg-dark-card"
+                  : "border-dark-border bg-dark-card hover:border-gray-500"
+              } ${isCompleted ? "opacity-50" : "opacity-100"}`}
               onClick={() => handleTaskClick(task.id)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
@@ -78,85 +84,48 @@ export default function MetricsDisplay({
               aria-expanded={dependencyCount > 0 ? isSelected : undefined}
               aria-label={`Task: ${task.description}${isCompleted ? " (completed)" : ""}`}
             >
-              {/* Task description — Req 8.1: strikethrough for completed */}
-              <div
-                style={{
-                  textDecoration: isCompleted ? "line-through" : "none",
-                  fontWeight: 600,
-                  marginBottom: "0.5rem",
-                }}
-              >
-                {task.description}
-                {isCompleted && (
-                  <span aria-label="Completed" style={{ marginLeft: "0.5rem" }}>
-                    ✓
-                  </span>
-                )}
-              </div>
+              {/* Delegate rendering to TaskCard — Req 4.4 */}
+              <TaskCard
+                task={task}
+                index={idx + 1}
+                isCompleted={isCompleted}
+                onMarkComplete={onTaskComplete}
+                allTasks={tasks}
+              />
 
-              {/* Metrics row — Req 3.1, 3.2, 3.3, 3.4, 3.5 */}
-              <div
-                role="group"
-                aria-label={`Metrics for ${task.description}`}
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: "1rem",
-                  fontSize: "0.875rem",
-                }}
-              >
-                <span data-testid={`priority-${task.id}`}>
-                  <strong>Priority:</strong> {task.metrics.priority}
-                </span>
-                <span data-testid={`effort-${task.id}`}>
-                  <strong>Effort:</strong>{" "}
-                  {task.metrics.effortPercentage.toFixed(1)}%
-                </span>
-                <span data-testid={`dependencies-${task.id}`}>
-                  <strong>Dependencies:</strong> {dependencyCount}
-                </span>
-                <span data-testid={`difficulty-${task.id}`}>
-                  <strong>Difficulty:</strong> {task.metrics.difficultyLevel}
-                </span>
-                <span data-testid={`estimated-time-${task.id}`}>
-                  <strong>Est. Time:</strong> {task.metrics.estimatedTime} min
-                </span>
-              </div>
-
-              {/* Dependency detail list — Req 3.6 */}
+              {/* Dependency detail list — preserved from original */}
               {isSelected && dependencyCount > 0 && (
                 <div
-                  style={{ marginTop: "0.5rem", paddingLeft: "1rem" }}
+                  className="mt-3 border-t border-dark-border pt-3 pl-9"
                   aria-label="Dependency list"
                 >
-                  <strong>Depends on:</strong>
-                  <ul role="list" aria-label="Dependencies">
+                  <strong className="text-sm text-gray-300">Depends on:</strong>
+                  <ul
+                    role="list"
+                    aria-label="Dependencies"
+                    className="mt-1 flex flex-col gap-1"
+                  >
                     {task.metrics.dependsOn.map((depId) => (
-                      <li key={depId} data-testid={`dep-${task.id}-${depId}`}>
+                      <li
+                        key={depId}
+                        data-testid={`dep-${task.id}-${depId}`}
+                        className="text-sm text-gray-400"
+                      >
                         {taskDescriptionById.get(depId) ?? depId}
                       </li>
                     ))}
                   </ul>
                 </div>
               )}
-
-              {/* Complete button */}
-              {!isCompleted && onTaskComplete && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onTaskComplete(task.id);
-                  }}
-                  style={{ marginTop: "0.5rem" }}
-                  aria-label={`Mark "${task.description}" as complete`}
-                >
-                  Mark Complete
-                </button>
-              )}
             </li>
           );
         })}
       </ul>
+
+      {/* Footer note — Req 6.4 */}
+      <p className="mt-4 text-center text-xs text-gray-500">
+        Tasks are AI-generated and may need review.
+      </p>
     </section>
   );
 }

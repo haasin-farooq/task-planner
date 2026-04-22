@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import MetricsDisplay from "../MetricsDisplay";
 import type { AnalyzedTask } from "../../types";
@@ -63,70 +63,90 @@ describe("MetricsDisplay", () => {
     expect(screen.getByText("No tasks to display.")).toBeInTheDocument();
   });
 
-  // Req 3.1 — Priority
+  // Req 3.1 — Priority (now rendered via PriorityBadge inside TaskCard)
   it("displays the priority for each task", () => {
     render(<MetricsDisplay tasks={sampleTasks} completedTaskIds={new Set()} />);
 
-    expect(screen.getByTestId("priority-t1")).toHaveTextContent("Priority: 4");
-    expect(screen.getByTestId("priority-t2")).toHaveTextContent("Priority: 2");
-    expect(screen.getByTestId("priority-t3")).toHaveTextContent("Priority: 5");
+    // TaskCard renders PriorityBadge: priority 4 → "High", 2 → "Low", 5 → "High"
+    const card1 = screen.getByTestId("task-card-t1");
+    expect(card1).toHaveTextContent("High");
+
+    const card2 = screen.getByTestId("task-card-t2");
+    expect(card2).toHaveTextContent("Low");
+
+    const card3 = screen.getByTestId("task-card-t3");
+    expect(card3).toHaveTextContent("High");
   });
 
-  // Req 3.2 — Effort percentage
+  // Req 3.2 — Effort percentage (now rendered via EffortIndicator inside TaskCard)
   it("displays the effort percentage for each task", () => {
     render(<MetricsDisplay tasks={sampleTasks} completedTaskIds={new Set()} />);
 
-    expect(screen.getByTestId("effort-t1")).toHaveTextContent("Effort: 35.0%");
-    expect(screen.getByTestId("effort-t2")).toHaveTextContent("Effort: 25.0%");
-    expect(screen.getByTestId("effort-t3")).toHaveTextContent("Effort: 40.0%");
+    // EffortIndicator renders aria-label with rounded percentage
+    const card1 = screen.getByTestId("task-card-t1");
+    expect(within(card1).getByLabelText("Effort: 35%")).toBeInTheDocument();
+
+    const card2 = screen.getByTestId("task-card-t2");
+    expect(within(card2).getByLabelText("Effort: 25%")).toBeInTheDocument();
+
+    const card3 = screen.getByTestId("task-card-t3");
+    expect(within(card3).getByLabelText("Effort: 40%")).toBeInTheDocument();
   });
 
-  // Req 3.3 — Dependency count
-  it("displays the dependency count for each task", () => {
+  // Req 3.3 — Dependencies (now rendered via TaskCard dependency section)
+  it("displays dependencies for each task", () => {
     render(<MetricsDisplay tasks={sampleTasks} completedTaskIds={new Set()} />);
 
-    expect(screen.getByTestId("dependencies-t1")).toHaveTextContent(
-      "Dependencies: 1",
-    );
-    expect(screen.getByTestId("dependencies-t2")).toHaveTextContent(
-      "Dependencies: 0",
-    );
-    expect(screen.getByTestId("dependencies-t3")).toHaveTextContent(
-      "Dependencies: 2",
-    );
+    // TaskCard shows dependency items or "None"
+    const card1 = screen.getByTestId("task-card-t1");
+    const deps1 = within(card1).getAllByTestId("dependency-item");
+    expect(deps1).toHaveLength(1);
+
+    const card2 = screen.getByTestId("task-card-t2");
+    const deps2 = within(card2).getByTestId("dependency-item");
+    expect(deps2).toHaveTextContent("None");
+
+    const card3 = screen.getByTestId("task-card-t3");
+    const deps3 = within(card3).getAllByTestId("dependency-item");
+    expect(deps3).toHaveLength(2);
   });
 
-  // Req 3.4 — Difficulty level
+  // Req 3.4 — Difficulty level (now rendered via DifficultyRating inside TaskCard)
   it("displays the difficulty level for each task", () => {
     render(<MetricsDisplay tasks={sampleTasks} completedTaskIds={new Set()} />);
 
-    expect(screen.getByTestId("difficulty-t1")).toHaveTextContent(
-      "Difficulty: 3",
-    );
-    expect(screen.getByTestId("difficulty-t2")).toHaveTextContent(
-      "Difficulty: 1",
-    );
-    expect(screen.getByTestId("difficulty-t3")).toHaveTextContent(
-      "Difficulty: 5",
-    );
+    const card1 = screen.getByTestId("task-card-t1");
+    expect(
+      within(card1).getByLabelText("Difficulty: 3 out of 5"),
+    ).toBeInTheDocument();
+
+    const card2 = screen.getByTestId("task-card-t2");
+    expect(
+      within(card2).getByLabelText("Difficulty: 1 out of 5"),
+    ).toBeInTheDocument();
+
+    const card3 = screen.getByTestId("task-card-t3");
+    expect(
+      within(card3).getByLabelText("Difficulty: 5 out of 5"),
+    ).toBeInTheDocument();
   });
 
-  // Req 3.5 — Estimated time
+  // Req 3.5 — Estimated time (now rendered via formatDuration inside TaskCard)
   it("displays the estimated time for each task", () => {
     render(<MetricsDisplay tasks={sampleTasks} completedTaskIds={new Set()} />);
 
-    expect(screen.getByTestId("estimated-time-t1")).toHaveTextContent(
-      "Est. Time: 60 min",
-    );
-    expect(screen.getByTestId("estimated-time-t2")).toHaveTextContent(
-      "Est. Time: 30 min",
-    );
-    expect(screen.getByTestId("estimated-time-t3")).toHaveTextContent(
-      "Est. Time: 90 min",
-    );
+    // formatDuration: 60 → "1h", 30 → "30 min", 90 → "1h 30m"
+    const card1 = screen.getByTestId("task-card-t1");
+    expect(card1).toHaveTextContent("1h");
+
+    const card2 = screen.getByTestId("task-card-t2");
+    expect(card2).toHaveTextContent("30 min");
+
+    const card3 = screen.getByTestId("task-card-t3");
+    expect(card3).toHaveTextContent("1h 30m");
   });
 
-  // Req 3.6 — Dependency list on selection
+  // Req 3.6 — Dependency list on selection (expanded detail in MetricsDisplay)
   it("shows the dependency list when a task with dependencies is selected", async () => {
     const user = userEvent.setup();
     render(<MetricsDisplay tasks={sampleTasks} completedTaskIds={new Set()} />);
@@ -134,7 +154,7 @@ describe("MetricsDisplay", () => {
     // Click on task t3 which depends on t1 and t2
     await user.click(screen.getByTestId("metrics-task-t3"));
 
-    // Should show the dependency descriptions
+    // Should show the dependency descriptions in the expanded detail section
     expect(screen.getByTestId("dep-t3-t1")).toHaveTextContent("Write report");
     expect(screen.getByTestId("dep-t3-t2")).toHaveTextContent("Review PRs");
   });
@@ -153,45 +173,22 @@ describe("MetricsDisplay", () => {
   });
 
   // Req 8.1 — Completed tasks are visually distinguished
-  it("visually distinguishes completed tasks with strikethrough", () => {
+  it("visually distinguishes completed tasks with reduced opacity", () => {
     render(
       <MetricsDisplay tasks={sampleTasks} completedTaskIds={new Set(["t2"])} />,
     );
 
-    // The completed task should have a checkmark
+    // The completed task wrapper should have the opacity-50 class
     const completedItem = screen.getByTestId("metrics-task-t2");
-    expect(completedItem).toHaveTextContent("✓");
-
-    // The completed task should have reduced opacity
-    expect(completedItem).toHaveStyle({ opacity: "0.5" });
+    expect(completedItem.className).toContain("opacity-50");
 
     // Non-completed tasks should have full opacity
     const activeItem = screen.getByTestId("metrics-task-t1");
-    expect(activeItem).toHaveStyle({ opacity: "1" });
+    expect(activeItem.className).toContain("opacity-100");
   });
 
-  it("does not show the Mark Complete button for completed tasks", () => {
-    const onComplete = vi.fn();
-    render(
-      <MetricsDisplay
-        tasks={sampleTasks}
-        completedTaskIds={new Set(["t2"])}
-        onTaskComplete={onComplete}
-      />,
-    );
-
-    // Completed task should not have a complete button
-    expect(
-      screen.queryByLabelText('Mark "Review PRs" as complete'),
-    ).not.toBeInTheDocument();
-
-    // Non-completed tasks should have the button
-    expect(
-      screen.getByLabelText('Mark "Write report" as complete'),
-    ).toBeInTheDocument();
-  });
-
-  it("calls onTaskComplete when the Mark Complete button is clicked", async () => {
+  // Completion is now handled via OverflowMenu inside TaskCard
+  it("triggers onTaskComplete via the overflow menu Mark Complete action", async () => {
     const user = userEvent.setup();
     const onComplete = vi.fn();
     render(
@@ -202,8 +199,33 @@ describe("MetricsDisplay", () => {
       />,
     );
 
-    await user.click(screen.getByLabelText('Mark "Write report" as complete'));
+    // Open the overflow menu on the first task card
+    const card1 = screen.getByTestId("task-card-t1");
+    const menuButton = within(card1).getByRole("button", {
+      name: "⋯",
+    });
+    await user.click(menuButton);
+
+    // Click "Mark Complete" in the dropdown
+    const markCompleteBtn = screen.getByRole("menuitem", {
+      name: "Mark Complete",
+    });
+    await user.click(markCompleteBtn);
 
     expect(onComplete).toHaveBeenCalledWith("t1");
+  });
+
+  // Req 6.3 — Parsed tasks header
+  it("displays the 'Parsed tasks' section header", () => {
+    render(<MetricsDisplay tasks={sampleTasks} completedTaskIds={new Set()} />);
+    expect(screen.getByText("Parsed tasks")).toBeInTheDocument();
+  });
+
+  // Req 6.4 — Footer note
+  it("displays the AI-generated footer note", () => {
+    render(<MetricsDisplay tasks={sampleTasks} completedTaskIds={new Set()} />);
+    expect(
+      screen.getByText("Tasks are AI-generated and may need review."),
+    ).toBeInTheDocument();
   });
 });

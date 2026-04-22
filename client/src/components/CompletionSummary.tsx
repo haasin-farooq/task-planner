@@ -29,44 +29,30 @@ export default function CompletionSummary({
   );
   const diff = totalActual - totalEstimated;
 
+  const diffColorClass =
+    diff > 0 ? "text-red-400" : diff < 0 ? "text-green-400" : "text-gray-400";
+
   return (
     <section
       aria-label="Completion summary"
       data-testid="completion-summary"
-      style={{
-        padding: "1.5rem",
-        backgroundColor: "#f0fdf4",
-        border: "1px solid #16a34a",
-        borderRadius: "0.75rem",
-        textAlign: "center",
-        marginBottom: "1.5rem",
-      }}
+      className="p-6 bg-dark-card border border-green-600 rounded-xl text-center mb-6"
     >
-      <h2 style={{ color: "#16a34a", marginTop: 0 }}>🎉 All Tasks Complete!</h2>
+      <h2 className="text-green-400 mt-0 text-xl font-semibold">
+        🎉 All Tasks Complete!
+      </h2>
 
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          gap: "2rem",
-          flexWrap: "wrap",
-          marginBottom: "1rem",
-        }}
-      >
+      <div className="flex justify-center gap-8 flex-wrap mb-4">
         <div data-testid="total-estimated">
-          <div style={{ fontSize: "0.875rem", color: "#6b7280" }}>
-            Total Estimated
-          </div>
-          <div style={{ fontSize: "1.5rem", fontWeight: 600 }}>
+          <div className="text-sm text-gray-400">Total Estimated</div>
+          <div className="text-2xl font-semibold text-white">
             {totalEstimated} min
           </div>
         </div>
 
         <div data-testid="total-actual">
-          <div style={{ fontSize: "0.875rem", color: "#6b7280" }}>
-            Total Actual
-          </div>
-          <div style={{ fontSize: "1.5rem", fontWeight: 600 }}>
+          <div className="text-sm text-gray-400">Total Actual</div>
+          <div className="text-2xl font-semibold text-white">
             {totalActual} min
           </div>
         </div>
@@ -74,12 +60,7 @@ export default function CompletionSummary({
 
       <p
         data-testid="time-comparison"
-        style={{
-          fontSize: "1rem",
-          fontWeight: 500,
-          color: diff > 0 ? "#dc2626" : diff < 0 ? "#16a34a" : "#6b7280",
-          margin: 0,
-        }}
+        className={`text-base font-medium m-0 ${diffColorClass}`}
       >
         {diff > 0
           ? `You took ${diff} min longer than estimated.`

@@ -35,42 +35,17 @@ export default function UnblockedNotification({
       role="status"
       aria-live="polite"
       data-testid="unblocked-notification"
-      style={{
-        position: "fixed",
-        bottom: "1.5rem",
-        right: "1.5rem",
-        maxWidth: "22rem",
-        padding: "1rem",
-        backgroundColor: "#eff6ff",
-        border: "1px solid #3b82f6",
-        borderRadius: "0.75rem",
-        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-        zIndex: 1001,
-      }}
+      className="fixed bottom-6 right-6 max-w-[22rem] p-4 bg-dark-card border border-accent-light rounded-xl shadow-lg shadow-black/25 z-[1001]"
     >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-        }}
-      >
-        <strong style={{ color: "#1d4ed8" }}>
+      <div className="flex justify-between items-start">
+        <strong className="text-accent-light">
           🔓 {unblockedTasks.length} task
           {unblockedTasks.length !== 1 ? "s" : ""} unblocked
         </strong>
         <button
           onClick={onDismiss}
           aria-label="Dismiss notification"
-          style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            fontSize: "1.25rem",
-            lineHeight: 1,
-            color: "#6b7280",
-            padding: 0,
-          }}
+          className="bg-transparent border-none cursor-pointer text-xl leading-none text-gray-400 p-0 hover:text-gray-200"
         >
           ×
         </button>
@@ -79,11 +54,7 @@ export default function UnblockedNotification({
       <ul
         role="list"
         aria-label="Unblocked tasks"
-        style={{
-          margin: "0.5rem 0 0",
-          paddingLeft: "1.25rem",
-          fontSize: "0.875rem",
-        }}
+        className="mt-2 pl-5 text-sm text-gray-300"
       >
         {unblockedTasks.map((t) => (
           <li key={t.id}>{t.description}</li>
