@@ -192,7 +192,7 @@ This plan implements the AI Daily Task Planner as a full-stack TypeScript applic
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6_
 
 - [ ] 10. Implement REST API endpoints
-  - [ ] 10.1 Create Express app with route handlers for all 8 endpoints
+  - [x] 10.1 Create Express app with route handlers for all 8 endpoints
     - Create `server/src/app.ts` with Express setup, JSON middleware, error handling
     - Implement `POST /api/tasks/parse` — calls TaskInputParser, returns parsed tasks
     - Implement `POST /api/tasks/analyze` — calls TaskAnalyzer, stores results in DB, returns analyzed tasks
@@ -211,7 +211,7 @@ This plan implements the AI Daily Task Planner as a full-stack TypeScript applic
     - Test that PATCH complete returns unblocked tasks
     - _Requirements: 1.3, 2.6, 5.4, 8.4_
 
-- [ ] 11. Checkpoint
+- [x] 11. Checkpoint
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 12. Implement React frontend components
