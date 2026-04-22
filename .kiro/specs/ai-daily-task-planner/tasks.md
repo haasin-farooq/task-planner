@@ -130,7 +130,7 @@ This plan implements the AI Daily Task Planner as a full-stack TypeScript applic
     - _Requirements: 6.6_
 
 - [ ] 7. Implement Analytics Aggregator
-  - [ ] 7.1 Implement AnalyticsAggregator with dashboard metrics computation
+  - [x] 7.1 Implement AnalyticsAggregator with dashboard metrics computation
     - Create `server/src/services/analytics-aggregator.ts`
     - Implement `getSummary(userId, startDate, endDate): AnalyticsSummary` — queries completion_history and computes dailyStats, difficultyBreakdown, performanceCategories, insufficientData flag
     - Implement `getDailyProgress(userId, date): number` — returns (completed / total) × 100 for the given date's session
@@ -158,7 +158,7 @@ This plan implements the AI Daily Task Planner as a full-stack TypeScript applic
     - Generate random record counts; verify insufficientData is true iff count < 5
     - **Validates: Requirements 7.7**
 
-- [ ] 8. Checkpoint
+- [x] 8. Checkpoint
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 9. Implement Task Input Parser and Task Analyzer (LLM integration)
