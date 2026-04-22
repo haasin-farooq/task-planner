@@ -1,14 +1,36 @@
-import express from "express";
-import cors from "cors";
+/**
+ * Server entry point — initializes the database, creates service instances,
+ * and starts the Express server.
+ */
 
-const app = express();
+import { getDb } from "./db/connection.js";
+import { createApp } from "./app.js";
+import { TaskInputParser } from "./services/task-input-parser.js";
+import { TaskAnalyzer } from "./services/task-analyzer.js";
+import { AdaptiveLearningEngine } from "./services/adaptive-learning-engine.js";
+import { AnalyticsAggregator } from "./services/analytics-aggregator.js";
+import { PreferenceProfileStore } from "./services/preference-profile-store.js";
+
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
-app.use(express.json());
+// Initialize database
+const db = getDb();
 
-app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok" });
+// Create service instances
+const learningEngine = new AdaptiveLearningEngine(db);
+const parser = new TaskInputParser();
+const analyzer = new TaskAnalyzer(learningEngine);
+const analytics = new AnalyticsAggregator(db);
+const preferenceStore = new PreferenceProfileStore(db);
+
+// Create and start the Express app
+const app = createApp({
+  db,
+  parser,
+  analyzer,
+  learningEngine,
+  analytics,
+  preferenceStore,
 });
 
 app.listen(PORT, () => {
