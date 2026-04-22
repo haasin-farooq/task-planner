@@ -31,7 +31,7 @@ This plan implements the AI Daily Task Planner as a full-stack TypeScript applic
     - Implement `clampMetrics(metrics: TaskMetrics): TaskMetrics` that clamps out-of-range values
     - _Requirements: 2.1, 2.3, 2.4_
 
-  - [ ]\* 2.2 Write property test for metrics validation (Property 1)
+  - [x] 2.2 Write property test for metrics validation (Property 1)
     - **Property 1: Task metrics are in valid ranges**
     - Generate random metric objects with values inside and outside valid ranges; verify validation correctly accepts/rejects
     - **Validates: Requirements 2.1, 2.3, 2.4**
@@ -42,7 +42,7 @@ This plan implements the AI Daily Task Planner as a full-stack TypeScript applic
     - Handle edge cases: single task gets 100%, zero values, negative values
     - _Requirements: 2.2_
 
-  - [ ]\* 2.4 Write property test for effort normalization (Property 2)
+  - [x] 2.4 Write property test for effort normalization (Property 2)
     - **Property 2: Effort percentages sum to 100**
     - Generate random arrays of positive numbers; verify normalized output sums to 100 (±0.01 tolerance)
     - **Validates: Requirements 2.2**
@@ -54,17 +54,17 @@ This plan implements the AI Daily Task Planner as a full-stack TypeScript applic
     - Implement `getUnblockedTasks(tasks: AnalyzedTask[], completedIds: Set<string>): AnalyzedTask[]` that returns tasks whose dependencies are all completed
     - _Requirements: 2.5, 2.6, 8.4_
 
-  - [ ]\* 2.6 Write property test for dependency reference validation (Property 3)
+  - [x] 2.6 Write property test for dependency reference validation (Property 3)
     - **Property 3: Dependency references are valid**
     - Generate random task lists with random dependency references; verify validator catches all invalid refs
     - **Validates: Requirements 2.5**
 
-  - [ ]\* 2.7 Write property test for circular dependency detection (Property 4)
+  - [x] 2.7 Write property test for circular dependency detection (Property 4)
     - **Property 4: Circular dependency detection**
     - Generate random directed graphs (some with cycles, some DAGs); verify detector correctly identifies cycles and reports none for DAGs
     - **Validates: Requirements 2.6**
 
-  - [ ]\* 2.8 Write property test for task completion unblocking (Property 13)
+  - [x] 2.8 Write property test for task completion unblocking (Property 13)
     - **Property 13: Task completion unblocks dependents**
     - Generate random DAGs with some tasks completed; verify unblocked set is exactly those tasks whose every dependency is completed
     - **Validates: Requirements 8.4**
