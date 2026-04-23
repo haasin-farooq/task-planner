@@ -45,6 +45,8 @@ export interface PreferenceResult {
 export interface SessionTasksResult {
   sessionId: string;
   tasks: AnalyzedTask[];
+  completedTaskIds: string[];
+  actualTimes: Record<string, number>;
 }
 
 // ---------------------------------------------------------------------------

@@ -68,11 +68,6 @@ export default function OverflowMenu({
     setIsOpen(false);
   }
 
-  function handleViewDetails() {
-    // Placeholder action — no-op for now
-    setIsOpen(false);
-  }
-
   return (
     <div ref={containerRef} className="relative inline-block">
       <button
@@ -98,14 +93,6 @@ export default function OverflowMenu({
             className="block w-full px-4 py-2 text-left text-sm text-gray-200 hover:bg-dark-surface hover:text-white focus:bg-dark-surface focus:text-white focus:outline-none"
           >
             Mark Complete
-          </button>
-          <button
-            role="menuitem"
-            type="button"
-            onClick={handleViewDetails}
-            className="block w-full px-4 py-2 text-left text-sm text-gray-200 hover:bg-dark-surface hover:text-white focus:bg-dark-surface focus:text-white focus:outline-none"
-          >
-            View Details
           </button>
         </div>
       )}

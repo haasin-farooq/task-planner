@@ -264,14 +264,8 @@ export default function TaskInput({ onConfirm }: TaskInputProps) {
       className="rounded-xl bg-dark-card border border-dark-border p-6"
     >
       {/* Card header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="mb-4">
         <h2 className="text-lg font-semibold text-white">Enter your tasks</h2>
-        <button
-          type="button"
-          className="rounded-lg bg-dark-surface border border-dark-border px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-dark-border transition-colors"
-        >
-          Get AI suggestions
-        </button>
       </div>
 
       <p className="text-sm text-gray-400 mb-3">

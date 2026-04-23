@@ -247,7 +247,19 @@ export function createApp(deps: AppDependencies): express.Express {
           return rowToAnalyzedTask(row, depRows);
         });
 
-        res.json({ sessionId, tasks });
+        // Include completion status so the client can restore state on reload
+        const completedTaskIds = taskRows
+          .filter((r) => r.is_completed)
+          .map((r) => r.id);
+
+        const actualTimes: Record<string, number> = {};
+        for (const row of taskRows) {
+          if (row.is_completed && row.actual_time != null) {
+            actualTimes[row.id] = row.actual_time;
+          }
+        }
+
+        res.json({ sessionId, tasks, completedTaskIds, actualTimes });
       } catch (err) {
         next(err);
       }
@@ -431,32 +443,25 @@ export function createApp(deps: AppDependencies): express.Express {
         const { startDate, endDate } = req.query;
 
         if (!startDate || !endDate) {
-          res
-            .status(400)
-            .json({
-              error: "Missing required query parameters: startDate, endDate",
-            });
+          res.status(400).json({
+            error: "Missing required query parameters: startDate, endDate",
+          });
           return;
         }
 
         if (typeof startDate !== "string" || typeof endDate !== "string") {
-          res
-            .status(400)
-            .json({
-              error:
-                "startDate and endDate must be strings in YYYY-MM-DD format",
-            });
+          res.status(400).json({
+            error: "startDate and endDate must be strings in YYYY-MM-DD format",
+          });
           return;
         }
 
         // Basic date format validation
         const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
         if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
-          res
-            .status(400)
-            .json({
-              error: "startDate and endDate must be in YYYY-MM-DD format",
-            });
+          res.status(400).json({
+            error: "startDate and endDate must be in YYYY-MM-DD format",
+          });
           return;
         }
 
