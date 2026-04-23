@@ -172,11 +172,12 @@ export default function KPIPanel({
         Overview
       </h3>
       <div
-        className="grid grid-cols-1 gap-3 md:grid-cols-3 lg:grid-cols-6"
+        className="grid grid-cols-2 gap-3 md:grid-cols-3"
         style={{
           backgroundColor: "#FFF8F0",
-          padding: "1rem",
+          padding: "1.25rem",
           borderRadius: "0.5rem",
+          border: "1px solid #E8E4DF",
         }}
       >
         {/* 2.1 — Total Completed */}

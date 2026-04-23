@@ -25,7 +25,7 @@ export default function LowDataState({
 
   return (
     <div
-      className="rounded-lg border border-[#E8E4DF] p-6"
+      className="rounded-lg border border-[#E8E4DF] p-8"
       style={{ backgroundColor: "#FFF8F0" }}
       role="status"
       aria-label={`${sectionName} requires more data`}

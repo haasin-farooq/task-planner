@@ -33,12 +33,12 @@ export default function AppShell(): JSX.Element {
   }, []);
 
   return (
-    <div className="flex flex-col md:flex-row h-screen w-screen bg-dark-bg overflow-hidden">
+    <div className="flex flex-col md:flex-row h-screen w-screen bg-dark-bg">
       {/* Left sidebar navigation — hidden on mobile, visible at md+ as sticky sidebar */}
       <LeftSidebar isOpen={sidebarOpen} onClose={handleCloseSidebar} />
 
       {/* Scrollable content area: on mobile scrolls main + stacked right sidebar together */}
-      <main className="flex-1 overflow-y-auto pt-6">
+      <main className="flex-1 min-h-0 min-w-0 overflow-y-auto pt-6 pb-6">
         {/* Mobile hamburger button — visible only below md breakpoint */}
         <div className="md:hidden flex items-center px-4 py-3 bg-dark-surface border-b border-dark-border">
           <button
