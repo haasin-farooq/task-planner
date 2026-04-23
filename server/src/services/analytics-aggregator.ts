@@ -53,6 +53,12 @@ interface CategoryRow {
   avg_estimated_time: number;
 }
 
+interface CategoryIdRow {
+  category_name: string;
+  avg_actual_time: number;
+  avg_estimated_time: number;
+}
+
 interface CountRow {
   cnt: number;
 }
@@ -73,6 +79,7 @@ interface CompletionRow {
   actual_time: number;
   completed_at: string;
   normalized_category: string | null;
+  category_name: string | null;
   task_description: string;
   difficulty_level: number;
 }
@@ -87,6 +94,14 @@ interface WeeklyAggRow {
 
 interface CategoryAggRow {
   normalized_category: string;
+  avg_estimated_time: number;
+  avg_actual_time: number;
+  avg_time_overrun: number;
+  sample_size: number;
+}
+
+interface CategoryIdAggRow {
+  category_name: string;
   avg_estimated_time: number;
   avg_actual_time: number;
   avg_time_overrun: number;
@@ -346,21 +361,22 @@ export class AnalyticsAggregator {
     const rows = this.db
       .prepare(
         `SELECT
-           category,
-           AVG(actual_time) as avg_actual_time,
-           AVG(estimated_time) as avg_estimated_time
-         FROM completion_history
-         WHERE user_id = ?
-           AND DATE(completed_at) >= ?
-           AND DATE(completed_at) <= ?
-           AND category IS NOT NULL
-         GROUP BY category
-         ORDER BY category`,
+           c.name as category_name,
+           AVG(ch.actual_time) as avg_actual_time,
+           AVG(ch.estimated_time) as avg_estimated_time
+         FROM completion_history ch
+         JOIN categories c ON c.id = ch.category_id
+         WHERE ch.user_id = ?
+           AND DATE(ch.completed_at) >= ?
+           AND DATE(ch.completed_at) <= ?
+           AND ch.category_id IS NOT NULL
+         GROUP BY ch.category_id
+         ORDER BY c.name`,
       )
-      .all(userId, startDate, endDate) as CategoryRow[];
+      .all(userId, startDate, endDate) as CategoryIdRow[];
 
     return rows.map((r) => ({
-      category: r.category,
+      category: r.category_name,
       avgActualTime: r.avg_actual_time,
       avgEstimatedTime: r.avg_estimated_time,
       label:
@@ -406,13 +422,15 @@ export class AnalyticsAggregator {
   ): CompletionRow[] {
     return this.db
       .prepare(
-        `SELECT estimated_time, actual_time, completed_at,
-                normalized_category, task_description, difficulty_level
-         FROM completion_history
-         WHERE user_id = ?
-           AND DATE(completed_at) >= ?
-           AND DATE(completed_at) <= ?
-         ORDER BY completed_at`,
+        `SELECT ch.estimated_time, ch.actual_time, ch.completed_at,
+                ch.normalized_category, c.name as category_name,
+                ch.task_description, ch.difficulty_level
+         FROM completion_history ch
+         LEFT JOIN categories c ON c.id = ch.category_id
+         WHERE ch.user_id = ?
+           AND DATE(ch.completed_at) >= ?
+           AND DATE(ch.completed_at) <= ?
+         ORDER BY ch.completed_at`,
       )
       .all(userId, startDate, endDate) as CompletionRow[];
   }
@@ -546,7 +564,7 @@ export class AnalyticsAggregator {
     const categoryData = new Map<string, { sum: number; count: number }>();
 
     for (const r of records) {
-      const cat = r.normalized_category ?? "Other";
+      const cat = r.category_name ?? r.normalized_category ?? "Other";
       if (r.estimated_time <= 0) continue;
       const acc = computeEstimationAccuracy(r.estimated_time, r.actual_time);
       const existing = categoryData.get(cat) ?? { sum: 0, count: 0 };
@@ -572,23 +590,24 @@ export class AnalyticsAggregator {
   ): string | null {
     const row = this.db
       .prepare(
-        `SELECT normalized_category,
-                AVG(actual_time - estimated_time) as avg_overrun
-         FROM completion_history
-         WHERE user_id = ?
-           AND DATE(completed_at) >= ?
-           AND DATE(completed_at) <= ?
-           AND normalized_category IS NOT NULL
-         GROUP BY normalized_category
+        `SELECT c.name as category_name,
+                AVG(ch.actual_time - ch.estimated_time) as avg_overrun
+         FROM completion_history ch
+         JOIN categories c ON c.id = ch.category_id
+         WHERE ch.user_id = ?
+           AND DATE(ch.completed_at) >= ?
+           AND DATE(ch.completed_at) <= ?
+           AND ch.category_id IS NOT NULL
+         GROUP BY ch.category_id
          HAVING avg_overrun > 0
          ORDER BY avg_overrun DESC
          LIMIT 1`,
       )
       .get(userId, startDate, endDate) as
-      | { normalized_category: string; avg_overrun: number }
+      | { category_name: string; avg_overrun: number }
       | undefined;
 
-    return row?.normalized_category ?? null;
+    return row?.category_name ?? null;
   }
 
   /**
@@ -692,23 +711,24 @@ export class AnalyticsAggregator {
     const rows = this.db
       .prepare(
         `SELECT
-           normalized_category,
-           AVG(estimated_time) as avg_estimated_time,
-           AVG(actual_time) as avg_actual_time,
-           AVG(actual_time - estimated_time) as avg_time_overrun,
+           c.name as category_name,
+           AVG(ch.estimated_time) as avg_estimated_time,
+           AVG(ch.actual_time) as avg_actual_time,
+           AVG(ch.actual_time - ch.estimated_time) as avg_time_overrun,
            COUNT(*) as sample_size
-         FROM completion_history
-         WHERE user_id = ?
-           AND DATE(completed_at) >= ?
-           AND DATE(completed_at) <= ?
-           AND normalized_category IS NOT NULL
-         GROUP BY normalized_category
-         ORDER BY normalized_category`,
+         FROM completion_history ch
+         JOIN categories c ON c.id = ch.category_id
+         WHERE ch.user_id = ?
+           AND DATE(ch.completed_at) >= ?
+           AND DATE(ch.completed_at) <= ?
+           AND ch.category_id IS NOT NULL
+         GROUP BY ch.category_id
+         ORDER BY c.name`,
       )
-      .all(userId, startDate, endDate) as CategoryAggRow[];
+      .all(userId, startDate, endDate) as CategoryIdAggRow[];
 
     const stats: CategoryPerformanceStat[] = rows.map((r) => ({
-      category: r.normalized_category,
+      category: r.category_name,
       avgEstimatedTime: r.avg_estimated_time,
       avgActualTime: r.avg_actual_time,
       avgTimeOverrun: r.avg_time_overrun,
@@ -765,7 +785,7 @@ export class AnalyticsAggregator {
     >();
 
     for (const r of records) {
-      const cat = r.normalized_category ?? "Other";
+      const cat = r.category_name ?? r.normalized_category ?? "Other";
       const date = new Date(r.completed_at);
       const { weekStart, weekEnd } = getISOWeekRange(date);
 
@@ -911,56 +931,58 @@ export class AnalyticsAggregator {
     // Get avg actual time per category for each period
     const recentRows = this.db
       .prepare(
-        `SELECT normalized_category,
-                AVG(actual_time) as avg_actual_time,
+        `SELECT c.name as category_name,
+                AVG(ch.actual_time) as avg_actual_time,
                 COUNT(*) as cnt
-         FROM completion_history
-         WHERE user_id = ?
-           AND DATE(completed_at) > ?
-           AND DATE(completed_at) <= ?
-           AND normalized_category IS NOT NULL
-         GROUP BY normalized_category`,
+         FROM completion_history ch
+         JOIN categories c ON c.id = ch.category_id
+         WHERE ch.user_id = ?
+           AND DATE(ch.completed_at) > ?
+           AND DATE(ch.completed_at) <= ?
+           AND ch.category_id IS NOT NULL
+         GROUP BY ch.category_id`,
       )
       .all(userId, recentStartStr, endDate) as {
-      normalized_category: string;
+      category_name: string;
       avg_actual_time: number;
       cnt: number;
     }[];
 
     const previousRows = this.db
       .prepare(
-        `SELECT normalized_category,
-                AVG(actual_time) as avg_actual_time,
+        `SELECT c.name as category_name,
+                AVG(ch.actual_time) as avg_actual_time,
                 COUNT(*) as cnt
-         FROM completion_history
-         WHERE user_id = ?
-           AND DATE(completed_at) > ?
-           AND DATE(completed_at) <= ?
-           AND normalized_category IS NOT NULL
-         GROUP BY normalized_category`,
+         FROM completion_history ch
+         JOIN categories c ON c.id = ch.category_id
+         WHERE ch.user_id = ?
+           AND DATE(ch.completed_at) > ?
+           AND DATE(ch.completed_at) <= ?
+           AND ch.category_id IS NOT NULL
+         GROUP BY ch.category_id`,
       )
       .all(userId, previousStartStr, recentStartStr) as {
-      normalized_category: string;
+      category_name: string;
       avg_actual_time: number;
       cnt: number;
     }[];
 
     const previousMap = new Map<string, number>();
     for (const r of previousRows) {
-      previousMap.set(r.normalized_category, r.avg_actual_time);
+      previousMap.set(r.category_name, r.avg_actual_time);
     }
 
     const fasterCategories: CategoryChange[] = [];
     const slowerCategories: CategoryChange[] = [];
 
     for (const r of recentRows) {
-      const prevAvg = previousMap.get(r.normalized_category);
+      const prevAvg = previousMap.get(r.category_name);
       if (prevAvg === undefined || prevAvg === 0) continue;
 
       const percentageChange = ((r.avg_actual_time - prevAvg) / prevAvg) * 100;
 
       const change: CategoryChange = {
-        category: r.normalized_category,
+        category: r.category_name,
         percentageChange,
         recentAvgTime: r.avg_actual_time,
         previousAvgTime: prevAvg,
@@ -1007,22 +1029,23 @@ export class AnalyticsAggregator {
     // Limited data categories: < 3 tasks in last 4 weeks (Req 8.4)
     const allCategoriesLast4Weeks = this.db
       .prepare(
-        `SELECT normalized_category, COUNT(*) as cnt
-         FROM completion_history
-         WHERE user_id = ?
-           AND DATE(completed_at) > ?
-           AND DATE(completed_at) <= ?
-           AND normalized_category IS NOT NULL
-         GROUP BY normalized_category
+        `SELECT c.name as category_name, COUNT(*) as cnt
+         FROM completion_history ch
+         JOIN categories c ON c.id = ch.category_id
+         WHERE ch.user_id = ?
+           AND DATE(ch.completed_at) > ?
+           AND DATE(ch.completed_at) <= ?
+           AND ch.category_id IS NOT NULL
+         GROUP BY ch.category_id
          HAVING cnt < 3`,
       )
       .all(userId, previousStartStr, endDate) as {
-      normalized_category: string;
+      category_name: string;
       cnt: number;
     }[];
 
     const limitedDataCategories = allCategoriesLast4Weeks.map(
-      (r) => r.normalized_category,
+      (r) => r.category_name,
     );
 
     return {

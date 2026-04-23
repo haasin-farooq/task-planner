@@ -104,6 +104,197 @@ describe("Schema migration — normalized_category", () => {
   });
 });
 
+describe("Schema migration — categories table", () => {
+  let db: Database.Database;
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it("should create categories table with correct columns (id, name, created_at)", () => {
+    db = createDb(":memory:");
+
+    const cols = db.pragma("table_info(categories)") as {
+      name: string;
+      type: string;
+      notnull: number;
+      pk: number;
+    }[];
+    const colMap = Object.fromEntries(cols.map((c) => [c.name, c]));
+
+    expect(colMap).toHaveProperty("id");
+    expect(colMap).toHaveProperty("name");
+    expect(colMap).toHaveProperty("created_at");
+
+    expect(colMap.id.pk).toBe(1);
+    expect(colMap.name.notnull).toBe(1);
+  });
+
+  it("should seed 10 canonical categories", () => {
+    db = createDb(":memory:");
+
+    const rows = db
+      .prepare("SELECT name FROM categories ORDER BY name")
+      .all() as { name: string }[];
+    const names = rows.map((r) => r.name);
+
+    expect(names).toEqual([
+      "Admin",
+      "Communication",
+      "Design",
+      "Development",
+      "Learning",
+      "Other",
+      "Planning",
+      "Research",
+      "Testing",
+      "Writing",
+    ]);
+  });
+
+  it("should add category_id column to completion_history", () => {
+    db = createDb(":memory:");
+
+    const cols = db.pragma("table_info(completion_history)") as {
+      name: string;
+    }[];
+    const colNames = cols.map((c) => c.name);
+
+    expect(colNames).toContain("category_id");
+  });
+
+  it("should add category_id column to behavioral_adjustments", () => {
+    db = createDb(":memory:");
+
+    const cols = db.pragma("table_info(behavioral_adjustments)") as {
+      name: string;
+    }[];
+    const colNames = cols.map((c) => c.name);
+
+    expect(colNames).toContain("category_id");
+  });
+
+  it("should backfill category_id for existing completion_history rows", () => {
+    // Create a DB with the base schema but WITHOUT category_id columns
+    db = new Database(":memory:");
+    db.pragma("journal_mode = WAL");
+    db.pragma("foreign_keys = ON");
+    db.exec(SCHEMA_SQL);
+
+    // Insert a user and pre-migration completion records
+    db.exec("INSERT INTO users (id) VALUES ('u1')");
+    db.exec(`
+      INSERT INTO completion_history (id, user_id, task_description, category, estimated_time, actual_time, difficulty_level)
+      VALUES
+        ('c1', 'u1', 'Write blog post', 'writing', 30, 25, 2),
+        ('c2', 'u1', 'Fix login bug', 'coding', 60, 90, 4),
+        ('c3', 'u1', 'Random task', 'xyz', 15, 20, 1)
+    `);
+
+    // Run migrations — this should add columns, backfill normalized_category, then backfill category_id
+    runMigrations(db);
+
+    const rows = db
+      .prepare("SELECT id, category_id FROM completion_history ORDER BY id")
+      .all() as { id: string; category_id: number | null }[];
+
+    // c1 → "writing" normalizes to "Writing" → should match categories.id for Writing
+    // c2 → "coding" normalizes to "Development" → should match categories.id for Development
+    // c3 → "xyz" normalizes to "Other" → should match categories.id for Other
+    const writingId = (
+      db.prepare("SELECT id FROM categories WHERE name = 'Writing'").get() as {
+        id: number;
+      }
+    ).id;
+    const devId = (
+      db
+        .prepare("SELECT id FROM categories WHERE name = 'Development'")
+        .get() as { id: number }
+    ).id;
+    const otherId = (
+      db.prepare("SELECT id FROM categories WHERE name = 'Other'").get() as {
+        id: number;
+      }
+    ).id;
+
+    expect(rows).toEqual([
+      { id: "c1", category_id: writingId },
+      { id: "c2", category_id: devId },
+      { id: "c3", category_id: otherId },
+    ]);
+  });
+
+  it("should backfill category_id for existing behavioral_adjustments rows", () => {
+    db = new Database(":memory:");
+    db.pragma("journal_mode = WAL");
+    db.pragma("foreign_keys = ON");
+    db.exec(SCHEMA_SQL);
+
+    db.exec("INSERT INTO users (id) VALUES ('u1')");
+    db.exec(`
+      INSERT INTO behavioral_adjustments (user_id, category, time_multiplier, sample_size)
+      VALUES
+        ('u1', 'Writing', 1.2, 5),
+        ('u1', 'Development', 0.9, 10)
+    `);
+
+    runMigrations(db);
+
+    const rows = db
+      .prepare(
+        "SELECT category, category_id FROM behavioral_adjustments ORDER BY category",
+      )
+      .all() as { category: string; category_id: number | null }[];
+
+    const devId = (
+      db
+        .prepare("SELECT id FROM categories WHERE name = 'Development'")
+        .get() as { id: number }
+    ).id;
+    const writingId = (
+      db.prepare("SELECT id FROM categories WHERE name = 'Writing'").get() as {
+        id: number;
+      }
+    ).id;
+
+    expect(rows).toEqual([
+      { category: "Development", category_id: devId },
+      { category: "Writing", category_id: writingId },
+    ]);
+  });
+
+  it("should be idempotent — running migrations twice does not error or duplicate categories", () => {
+    db = new Database(":memory:");
+    db.pragma("journal_mode = WAL");
+    db.pragma("foreign_keys = ON");
+    db.exec(SCHEMA_SQL);
+
+    db.exec("INSERT INTO users (id) VALUES ('u1')");
+    db.exec(`
+      INSERT INTO completion_history (id, user_id, task_description, category, estimated_time, actual_time, difficulty_level)
+      VALUES ('c1', 'u1', 'Write blog post', 'writing', 30, 25, 2)
+    `);
+
+    // Run migrations twice
+    runMigrations(db);
+    expect(() => runMigrations(db)).not.toThrow();
+
+    // Categories should still be exactly 10
+    const count = (
+      db.prepare("SELECT COUNT(*) as cnt FROM categories").get() as {
+        cnt: number;
+      }
+    ).cnt;
+    expect(count).toBe(10);
+
+    // Backfilled category_id should remain correct (not nulled or duplicated)
+    const row = db
+      .prepare("SELECT category_id FROM completion_history WHERE id = 'c1'")
+      .get() as { category_id: number | null };
+    expect(row.category_id).not.toBeNull();
+  });
+});
+
 describe("Database schema", () => {
   let db: Database.Database;
 
@@ -125,6 +316,7 @@ describe("Database schema", () => {
     const tableNames = tables.map((t) => t.name).sort();
     expect(tableNames).toEqual([
       "behavioral_adjustments",
+      "categories",
       "completion_history",
       "preference_profiles",
       "task_dependencies",

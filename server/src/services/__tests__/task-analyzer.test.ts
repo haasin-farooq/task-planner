@@ -3,14 +3,23 @@
  *
  * Uses a mock OpenAI client and a mock AdaptiveLearningEngine to test
  * metric clamping, effort normalization, dependency validation, circular
- * dependency detection, behavioral model integration, and fallback behavior.
+ * dependency detection, behavioral model integration, fallback behavior,
+ * and category assignment integration.
  *
- * Validates: Requirements 2.1, 2.2, 2.3, 2.4, 2.5, 2.6
+ * Validates: Requirements 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 5.1, 5.2, 5.3, 5.4
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import Database from "better-sqlite3";
 import { TaskAnalyzer } from "../task-analyzer.js";
-import type { ParsedTask, BehavioralModel } from "../../types/index.js";
+import { AICategoryAssigner } from "../ai-category-assigner.js";
+import { CategoryRepository } from "../../db/category-repository.js";
+import { runMigrations } from "../../db/schema.js";
+import type {
+  ParsedTask,
+  BehavioralModel,
+  CategoryAssignmentResult,
+} from "../../types/index.js";
 
 // ---------------------------------------------------------------------------
 // Mock helpers
@@ -496,6 +505,344 @@ describe("TaskAnalyzer", () => {
       expect(result.circularDependencies).toHaveLength(0);
       // Should not call the LLM at all
       expect(create).not.toHaveBeenCalled();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Req 5.1, 5.2, 5.3, 5.4 — Category assignment integration
+  // -----------------------------------------------------------------------
+
+  describe("category assignment integration (Req 5.1, 5.2, 5.3, 5.4)", () => {
+    let db: Database.Database;
+    let categoryRepo: CategoryRepository;
+
+    beforeEach(() => {
+      db = new Database(":memory:");
+      runMigrations(db);
+      categoryRepo = new CategoryRepository(db);
+    });
+
+    afterEach(() => {
+      db.close();
+    });
+
+    /**
+     * Build a mock AICategoryAssigner that returns a controlled category
+     * for each call. Tracks calls for verification.
+     */
+    function createMockCategoryAssigner(categoryName: string, isNew = false) {
+      const assignCalls: Array<{
+        description: string;
+        existingCategories: string[];
+      }> = [];
+
+      const assigner = {
+        assign: vi
+          .fn()
+          .mockImplementation(
+            async (
+              description: string,
+              existingCategories: string[],
+            ): Promise<CategoryAssignmentResult> => {
+              assignCalls.push({ description, existingCategories });
+              return {
+                rawLLMCategory: categoryName,
+                finalCategory: categoryName,
+                isNew,
+              };
+            },
+          ),
+      } as unknown as AICategoryAssigner;
+
+      return { assigner, assignCalls };
+    }
+
+    it("includes category and categoryId on each analyzed task (Req 5.3, 5.4)", async () => {
+      const { client } = createMockClient({
+        content: llmJson([
+          {
+            id: "t1",
+            priority: 3,
+            effortPercentage: 50,
+            difficultyLevel: 2,
+            estimatedTime: 30,
+            dependsOn: [],
+          },
+          {
+            id: "t2",
+            priority: 4,
+            effortPercentage: 50,
+            difficultyLevel: 3,
+            estimatedTime: 45,
+            dependsOn: [],
+          },
+        ]),
+      });
+
+      const engine = createMockLearningEngine();
+      const { assigner } = createMockCategoryAssigner("Development");
+
+      const analyzer = new TaskAnalyzer(
+        engine,
+        client,
+        "gpt-4o-mini",
+        assigner,
+        categoryRepo,
+      );
+
+      const result = await analyzer.analyze(
+        [task("t1", "Fix the login bug"), task("t2", "Add unit tests")],
+        "user-1",
+      );
+
+      expect(result.tasks).toHaveLength(2);
+
+      for (const t of result.tasks) {
+        expect(t.category).toBe("Development");
+        expect(typeof t.categoryId).toBe("number");
+        expect(t.categoryId).toBeGreaterThan(0);
+      }
+    });
+
+    it("calls AICategoryAssigner.assign() for each task description (Req 5.1)", async () => {
+      const { client } = createMockClient({
+        content: llmJson([
+          {
+            id: "t1",
+            priority: 3,
+            effortPercentage: 50,
+            difficultyLevel: 2,
+            estimatedTime: 30,
+            dependsOn: [],
+          },
+          {
+            id: "t2",
+            priority: 4,
+            effortPercentage: 50,
+            difficultyLevel: 3,
+            estimatedTime: 45,
+            dependsOn: [],
+          },
+        ]),
+      });
+
+      const engine = createMockLearningEngine();
+      const { assigner, assignCalls } =
+        createMockCategoryAssigner("Development");
+
+      const analyzer = new TaskAnalyzer(
+        engine,
+        client,
+        "gpt-4o-mini",
+        assigner,
+        categoryRepo,
+      );
+
+      await analyzer.analyze(
+        [task("t1", "Fix the login bug"), task("t2", "Write documentation")],
+        "user-1",
+      );
+
+      // AICategoryAssigner.assign() should be called once per task
+      expect(assigner.assign).toHaveBeenCalledTimes(2);
+      expect(assignCalls[0].description).toBe("Fix the login bug");
+      expect(assignCalls[1].description).toBe("Write documentation");
+    });
+
+    it("passes current category names from CategoryRepository to AICategoryAssigner (Req 5.2)", async () => {
+      const { client } = createMockClient({
+        content: llmJson([
+          {
+            id: "t1",
+            priority: 3,
+            effortPercentage: 100,
+            difficultyLevel: 2,
+            estimatedTime: 30,
+            dependsOn: [],
+          },
+        ]),
+      });
+
+      const engine = createMockLearningEngine();
+      const { assigner, assignCalls } =
+        createMockCategoryAssigner("Development");
+
+      const analyzer = new TaskAnalyzer(
+        engine,
+        client,
+        "gpt-4o-mini",
+        assigner,
+        categoryRepo,
+      );
+
+      // The seeded categories from runMigrations should be passed
+      const seededNames = categoryRepo.getAllNames();
+
+      await analyzer.analyze([task("t1", "Fix the login bug")], "user-1");
+
+      expect(assignCalls[0].existingCategories).toEqual(seededNames);
+    });
+
+    it("resolves category via CategoryRepository.upsertByName() and assigns matching categoryId", async () => {
+      const { client } = createMockClient({
+        content: llmJson([
+          {
+            id: "t1",
+            priority: 3,
+            effortPercentage: 100,
+            difficultyLevel: 2,
+            estimatedTime: 30,
+            dependsOn: [],
+          },
+        ]),
+      });
+
+      const engine = createMockLearningEngine();
+      const { assigner } = createMockCategoryAssigner("Development");
+
+      const analyzer = new TaskAnalyzer(
+        engine,
+        client,
+        "gpt-4o-mini",
+        assigner,
+        categoryRepo,
+      );
+
+      const result = await analyzer.analyze(
+        [task("t1", "Fix the login bug")],
+        "user-1",
+      );
+
+      // The categoryId should match the ID in the categories table
+      const entity = categoryRepo.findByName("Development");
+      expect(entity).not.toBeNull();
+      expect(result.tasks[0].categoryId).toBe(entity!.id);
+      expect(result.tasks[0].category).toBe(entity!.name);
+    });
+
+    it("creates a new category in the table when AICategoryAssigner returns a new category name", async () => {
+      const { client } = createMockClient({
+        content: llmJson([
+          {
+            id: "t1",
+            priority: 3,
+            effortPercentage: 100,
+            difficultyLevel: 2,
+            estimatedTime: 30,
+            dependsOn: [],
+          },
+        ]),
+      });
+
+      const engine = createMockLearningEngine();
+      // Return a category name that doesn't exist in the seeded data
+      const { assigner } = createMockCategoryAssigner("Data Entry", true);
+
+      const analyzer = new TaskAnalyzer(
+        engine,
+        client,
+        "gpt-4o-mini",
+        assigner,
+        categoryRepo,
+      );
+
+      const result = await analyzer.analyze(
+        [task("t1", "Enter invoice data")],
+        "user-1",
+      );
+
+      expect(result.tasks[0].category).toBe("Data Entry");
+      expect(result.tasks[0].categoryId).toBeGreaterThan(0);
+
+      // Verify the new category was persisted in the table
+      const entity = categoryRepo.findByName("Data Entry");
+      expect(entity).not.toBeNull();
+      expect(entity!.id).toBe(result.tasks[0].categoryId);
+    });
+
+    it("assigns different categories to different tasks when assigner returns varying results", async () => {
+      const { client } = createMockClient({
+        content: llmJson([
+          {
+            id: "t1",
+            priority: 3,
+            effortPercentage: 50,
+            difficultyLevel: 2,
+            estimatedTime: 30,
+            dependsOn: [],
+          },
+          {
+            id: "t2",
+            priority: 4,
+            effortPercentage: 50,
+            difficultyLevel: 3,
+            estimatedTime: 45,
+            dependsOn: [],
+          },
+        ]),
+      });
+
+      const engine = createMockLearningEngine();
+
+      // Return different categories for each call
+      let callCount = 0;
+      const assigner = {
+        assign: vi.fn().mockImplementation(async () => {
+          callCount++;
+          const cat = callCount === 1 ? "Development" : "Testing";
+          return {
+            rawLLMCategory: cat,
+            finalCategory: cat,
+            isNew: false,
+          };
+        }),
+      } as unknown as AICategoryAssigner;
+
+      const analyzer = new TaskAnalyzer(
+        engine,
+        client,
+        "gpt-4o-mini",
+        assigner,
+        categoryRepo,
+      );
+
+      const result = await analyzer.analyze(
+        [task("t1", "Fix the login bug"), task("t2", "Add unit tests")],
+        "user-1",
+      );
+
+      expect(result.tasks[0].category).toBe("Development");
+      expect(result.tasks[1].category).toBe("Testing");
+
+      // Both should have valid but different categoryIds
+      expect(result.tasks[0].categoryId).not.toBe(result.tasks[1].categoryId);
+    });
+
+    it("does not assign categories when AICategoryAssigner is not provided", async () => {
+      const { client } = createMockClient({
+        content: llmJson([
+          {
+            id: "t1",
+            priority: 3,
+            effortPercentage: 100,
+            difficultyLevel: 2,
+            estimatedTime: 30,
+            dependsOn: [],
+          },
+        ]),
+      });
+
+      const engine = createMockLearningEngine();
+      // No categoryAssigner or categoryRepo passed
+      const analyzer = new TaskAnalyzer(engine, client);
+
+      const result = await analyzer.analyze(
+        [task("t1", "Fix the login bug")],
+        "user-1",
+      );
+
+      expect(result.tasks[0].category).toBeUndefined();
+      expect(result.tasks[0].categoryId).toBeUndefined();
     });
   });
 });
