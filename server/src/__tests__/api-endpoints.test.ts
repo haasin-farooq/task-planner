@@ -17,6 +17,7 @@ import { TaskAnalyzer } from "../services/task-analyzer.js";
 import { AdaptiveLearningEngine } from "../services/adaptive-learning-engine.js";
 import { AnalyticsAggregator } from "../services/analytics-aggregator.js";
 import { PreferenceProfileStore } from "../services/preference-profile-store.js";
+import { CategoryRepository } from "../db/category-repository.js";
 import type Database from "better-sqlite3";
 import type { Express } from "express";
 
@@ -29,6 +30,7 @@ let app: Express;
 let learningEngine: AdaptiveLearningEngine;
 let analytics: AnalyticsAggregator;
 let preferenceStore: PreferenceProfileStore;
+let categoryRepo: CategoryRepository;
 
 /**
  * Seed a user, session, and a set of tasks into the in-memory database.
@@ -87,6 +89,7 @@ beforeEach(() => {
   learningEngine = new AdaptiveLearningEngine(db);
   analytics = new AnalyticsAggregator(db);
   preferenceStore = new PreferenceProfileStore(db);
+  categoryRepo = new CategoryRepository(db);
 
   // Stub parser: returns a canned result. Empty input triggers the error path.
   const parser = {
@@ -139,6 +142,7 @@ beforeEach(() => {
     learningEngine,
     analytics,
     preferenceStore,
+    categoryRepo,
   };
 
   app = createApp(deps);

@@ -33,6 +33,16 @@ export interface TaskMetrics {
 
 export interface AnalyzedTask extends ParsedTask {
   metrics: TaskMetrics;
+  /** Final category name from AI assignment or fallback */
+  category?: string;
+  /** Foreign key to categories table */
+  categoryId?: number;
+}
+
+export interface CategoryEntity {
+  id: number;
+  name: string;
+  createdAt: string;
 }
 
 // --- Analytics ---

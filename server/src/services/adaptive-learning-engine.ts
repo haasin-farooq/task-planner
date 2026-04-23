@@ -23,6 +23,7 @@ import type {
   CategoryAdjustment,
 } from "../types/index.js";
 import { normalize } from "../utils/category-normalizer.js";
+import type { CategoryRepository } from "../db/category-repository.js";
 
 // ---------------------------------------------------------------------------
 // Row types for SQLite query results
@@ -45,9 +46,11 @@ interface CompletionCountRow {
 
 export class AdaptiveLearningEngine {
   private db: Database.Database;
+  private categoryRepo?: CategoryRepository;
 
-  constructor(db: Database.Database) {
+  constructor(db: Database.Database, categoryRepo?: CategoryRepository) {
     this.db = db;
+    this.categoryRepo = categoryRepo;
   }
 
   // -----------------------------------------------------------------------
@@ -71,39 +74,84 @@ export class AdaptiveLearningEngine {
         .prepare("INSERT OR IGNORE INTO users (id) VALUES (?)")
         .run(record.userId);
 
-      // 1. Insert into completion_history
+      // Resolve category_id via CategoryRepository when available (Req 6.1)
       const normalizedCategory = normalize(category);
-      this.db
-        .prepare(
-          `INSERT INTO completion_history
-             (id, user_id, task_description, category, normalized_category, estimated_time, actual_time, difficulty_level, completed_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(
-          uuidv4(),
-          record.userId,
-          record.description,
-          category,
-          normalizedCategory,
-          record.estimatedTime,
-          record.actualTime,
-          record.difficultyLevel,
-          record.completedAt.toISOString(),
-        );
+      let categoryId: number | null = null;
+      if (this.categoryRepo) {
+        const categoryEntity =
+          this.categoryRepo.upsertByName(normalizedCategory);
+        categoryId = categoryEntity.id;
+      }
+
+      // 1. Insert into completion_history (include category_id when resolved)
+      if (categoryId !== null) {
+        this.db
+          .prepare(
+            `INSERT INTO completion_history
+               (id, user_id, task_description, category, normalized_category, category_id, estimated_time, actual_time, difficulty_level, completed_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            uuidv4(),
+            record.userId,
+            record.description,
+            category,
+            normalizedCategory,
+            categoryId,
+            record.estimatedTime,
+            record.actualTime,
+            record.difficultyLevel,
+            record.completedAt.toISOString(),
+          );
+      } else {
+        this.db
+          .prepare(
+            `INSERT INTO completion_history
+               (id, user_id, task_description, category, normalized_category, estimated_time, actual_time, difficulty_level, completed_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            uuidv4(),
+            record.userId,
+            record.description,
+            category,
+            normalizedCategory,
+            record.estimatedTime,
+            record.actualTime,
+            record.difficultyLevel,
+            record.completedAt.toISOString(),
+          );
+      }
 
       // 2. Recompute the rolling average for this (user, category) pair.
       //    We query *all* history rows for the category so the multiplier
       //    is a true average rather than an incremental approximation.
-      const rows = this.db
-        .prepare(
-          `SELECT actual_time, estimated_time
-           FROM completion_history
-           WHERE user_id = ? AND category = ?`,
-        )
-        .all(record.userId, category) as {
-        actual_time: number;
-        estimated_time: number;
-      }[];
+      //    When category_id is available, group by category_id (Req 6.2);
+      //    otherwise fall back to grouping by the raw category text.
+      let rows: { actual_time: number; estimated_time: number }[];
+      if (categoryId !== null) {
+        rows = this.db
+          .prepare(
+            `SELECT actual_time, estimated_time
+             FROM completion_history
+             WHERE user_id = ? AND category_id = ?`,
+          )
+          .all(record.userId, categoryId) as {
+          actual_time: number;
+          estimated_time: number;
+        }[];
+      } else {
+        rows = this.db
+          .prepare(
+            `SELECT actual_time, estimated_time
+             FROM completion_history
+             WHERE user_id = ? AND category = ?`,
+          )
+          .all(record.userId, category) as {
+          actual_time: number;
+          estimated_time: number;
+        }[];
+      }
 
       const sampleSize = rows.length;
       const timeMultiplier =
@@ -116,24 +164,51 @@ export class AdaptiveLearningEngine {
       const difficultyAdjustment = timeMultiplier - 1.0;
 
       // 3. Upsert behavioral_adjustments
-      this.db
-        .prepare(
-          `INSERT INTO behavioral_adjustments
-             (user_id, category, time_multiplier, difficulty_adjustment, sample_size, updated_at)
-           VALUES (?, ?, ?, ?, ?, datetime('now'))
-           ON CONFLICT(user_id, category) DO UPDATE SET
-             time_multiplier   = excluded.time_multiplier,
-             difficulty_adjustment = excluded.difficulty_adjustment,
-             sample_size        = excluded.sample_size,
-             updated_at         = excluded.updated_at`,
-        )
-        .run(
-          record.userId,
-          category,
-          timeMultiplier,
-          difficultyAdjustment,
-          sampleSize,
-        );
+      //    When category_id is available, use the normalized category name as
+      //    the category column so that ON CONFLICT(user_id, category) correctly
+      //    groups all descriptions that resolve to the same category (Req 6.2, 6.3).
+      //    Otherwise fall back to the raw category text.
+      if (categoryId !== null) {
+        this.db
+          .prepare(
+            `INSERT INTO behavioral_adjustments
+               (user_id, category, category_id, time_multiplier, difficulty_adjustment, sample_size, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+             ON CONFLICT(user_id, category) DO UPDATE SET
+               category_id        = excluded.category_id,
+               time_multiplier    = excluded.time_multiplier,
+               difficulty_adjustment = excluded.difficulty_adjustment,
+               sample_size        = excluded.sample_size,
+               updated_at         = excluded.updated_at`,
+          )
+          .run(
+            record.userId,
+            normalizedCategory,
+            categoryId,
+            timeMultiplier,
+            difficultyAdjustment,
+            sampleSize,
+          );
+      } else {
+        this.db
+          .prepare(
+            `INSERT INTO behavioral_adjustments
+               (user_id, category, time_multiplier, difficulty_adjustment, sample_size, updated_at)
+             VALUES (?, ?, ?, ?, ?, datetime('now'))
+             ON CONFLICT(user_id, category) DO UPDATE SET
+               time_multiplier   = excluded.time_multiplier,
+               difficulty_adjustment = excluded.difficulty_adjustment,
+               sample_size        = excluded.sample_size,
+               updated_at         = excluded.updated_at`,
+          )
+          .run(
+            record.userId,
+            category,
+            timeMultiplier,
+            difficultyAdjustment,
+            sampleSize,
+          );
+      }
     });
 
     run();
@@ -158,20 +233,43 @@ export class AdaptiveLearningEngine {
 
     const totalCompletedTasks = countRow?.cnt ?? 0;
 
-    const rows = this.db
-      .prepare(
-        `SELECT category, time_multiplier, difficulty_adjustment, sample_size
-         FROM behavioral_adjustments
-         WHERE user_id = ?`,
-      )
-      .all(userId) as AdjustmentRow[];
+    let adjustments: CategoryAdjustment[];
 
-    const adjustments: CategoryAdjustment[] = rows.map((r) => ({
-      category: r.category,
-      timeMultiplier: r.time_multiplier,
-      difficultyAdjustment: r.difficulty_adjustment,
-      sampleSize: r.sample_size,
-    }));
+    if (this.categoryRepo) {
+      // When CategoryRepository is available, group by category_id and JOIN
+      // to the categories table for display names (Req 6.2)
+      const rows = this.db
+        .prepare(
+          `SELECT c.name as category, ba.time_multiplier, ba.difficulty_adjustment, ba.sample_size
+           FROM behavioral_adjustments ba
+           JOIN categories c ON c.id = ba.category_id
+           WHERE ba.user_id = ? AND ba.category_id IS NOT NULL`,
+        )
+        .all(userId) as AdjustmentRow[];
+
+      adjustments = rows.map((r) => ({
+        category: r.category,
+        timeMultiplier: r.time_multiplier,
+        difficultyAdjustment: r.difficulty_adjustment,
+        sampleSize: r.sample_size,
+      }));
+    } else {
+      // Fall back to grouping by raw category text
+      const rows = this.db
+        .prepare(
+          `SELECT category, time_multiplier, difficulty_adjustment, sample_size
+           FROM behavioral_adjustments
+           WHERE user_id = ?`,
+        )
+        .all(userId) as AdjustmentRow[];
+
+      adjustments = rows.map((r) => ({
+        category: r.category,
+        timeMultiplier: r.time_multiplier,
+        difficultyAdjustment: r.difficulty_adjustment,
+        sampleSize: r.sample_size,
+      }));
+    }
 
     return {
       userId,

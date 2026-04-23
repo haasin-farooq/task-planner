@@ -28,6 +28,7 @@ import { TaskAnalyzer } from "./services/task-analyzer.js";
 import { AdaptiveLearningEngine } from "./services/adaptive-learning-engine.js";
 import { AnalyticsAggregator } from "./services/analytics-aggregator.js";
 import { PreferenceProfileStore } from "./services/preference-profile-store.js";
+import { CategoryRepository } from "./db/category-repository.js";
 import { getUnblockedTasks } from "./utils/dependency-graph.js";
 import type {
   AnalyzedTask,
@@ -82,6 +83,7 @@ export interface AppDependencies {
   learningEngine: AdaptiveLearningEngine;
   analytics: AnalyticsAggregator;
   preferenceStore: PreferenceProfileStore;
+  categoryRepo: CategoryRepository;
 }
 
 /**
@@ -91,8 +93,15 @@ export interface AppDependencies {
  * in-memory databases and mock LLM clients.
  */
 export function createApp(deps: AppDependencies): express.Express {
-  const { db, parser, analyzer, learningEngine, analytics, preferenceStore } =
-    deps;
+  const {
+    db,
+    parser,
+    analyzer,
+    learningEngine,
+    analytics,
+    preferenceStore,
+    categoryRepo,
+  } = deps;
 
   const app = express();
 
@@ -110,6 +119,185 @@ export function createApp(deps: AppDependencies): express.Express {
   app.get("/api/health", (_req: Request, res: Response) => {
     res.json({ status: "ok" });
   });
+
+  // -----------------------------------------------------------------------
+  // GET /api/categories — List all categories (Req 10.1)
+  // -----------------------------------------------------------------------
+
+  app.get(
+    "/api/categories",
+    (_req: Request, res: Response, next: NextFunction) => {
+      try {
+        const categories = categoryRepo.getAll();
+        res.json(categories);
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  // -----------------------------------------------------------------------
+  // POST /api/categories/merge — Merge source category into target (Req 8.1–8.5, 10.2, 10.4, 10.5)
+  // -----------------------------------------------------------------------
+
+  app.post(
+    "/api/categories/merge",
+    (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const { sourceCategoryId, targetCategoryId } = req.body;
+
+        // Validate required fields
+        if (sourceCategoryId == null || targetCategoryId == null) {
+          res.status(400).json({
+            error:
+              "Missing required fields: sourceCategoryId, targetCategoryId",
+          });
+          return;
+        }
+
+        // Validate source !== target
+        if (sourceCategoryId === targetCategoryId) {
+          res
+            .status(400)
+            .json({ error: "Cannot merge a category with itself" });
+          return;
+        }
+
+        // Validate both categories exist
+        const sourceCategory = categoryRepo.findById(sourceCategoryId);
+        if (!sourceCategory) {
+          res.status(404).json({ error: "Source category not found" });
+          return;
+        }
+
+        const targetCategory = categoryRepo.findById(targetCategoryId);
+        if (!targetCategory) {
+          res.status(404).json({ error: "Target category not found" });
+          return;
+        }
+
+        // Execute merge in a transaction for atomicity
+        const mergeTransaction = db.transaction(() => {
+          // 1. Update all completion_history rows from source to target
+          db.prepare(
+            "UPDATE completion_history SET category_id = ? WHERE category_id = ?",
+          ).run(targetCategoryId, sourceCategoryId);
+
+          // 2. Recompute behavioral_adjustments as weighted average
+          // For each user that has adjustments for the source category,
+          // merge into the target category's adjustments.
+          const sourceAdjustments = db
+            .prepare(
+              "SELECT user_id, time_multiplier, difficulty_adjustment, sample_size FROM behavioral_adjustments WHERE category_id = ?",
+            )
+            .all(sourceCategoryId) as Array<{
+            user_id: string;
+            time_multiplier: number;
+            difficulty_adjustment: number;
+            sample_size: number;
+          }>;
+
+          for (const srcAdj of sourceAdjustments) {
+            const targetAdj = db
+              .prepare(
+                "SELECT time_multiplier, difficulty_adjustment, sample_size FROM behavioral_adjustments WHERE user_id = ? AND category_id = ?",
+              )
+              .get(srcAdj.user_id, targetCategoryId) as
+              | {
+                  time_multiplier: number;
+                  difficulty_adjustment: number;
+                  sample_size: number;
+                }
+              | undefined;
+
+            if (targetAdj) {
+              // Compute weighted average
+              const totalSamples = srcAdj.sample_size + targetAdj.sample_size;
+              const mergedTimeMultiplier =
+                totalSamples > 0
+                  ? (srcAdj.time_multiplier * srcAdj.sample_size +
+                      targetAdj.time_multiplier * targetAdj.sample_size) /
+                    totalSamples
+                  : targetAdj.time_multiplier;
+              const mergedDifficultyAdj =
+                totalSamples > 0
+                  ? (srcAdj.difficulty_adjustment * srcAdj.sample_size +
+                      targetAdj.difficulty_adjustment * targetAdj.sample_size) /
+                    totalSamples
+                  : targetAdj.difficulty_adjustment;
+
+              db.prepare(
+                "UPDATE behavioral_adjustments SET time_multiplier = ?, difficulty_adjustment = ?, sample_size = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND category_id = ?",
+              ).run(
+                mergedTimeMultiplier,
+                mergedDifficultyAdj,
+                totalSamples,
+                srcAdj.user_id,
+                targetCategoryId,
+              );
+            } else {
+              // No target adjustment exists for this user — reassign the source row
+              db.prepare(
+                "UPDATE behavioral_adjustments SET category_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND category_id = ?",
+              ).run(targetCategoryId, srcAdj.user_id, sourceCategoryId);
+            }
+          }
+
+          // Delete any remaining source behavioral_adjustments rows
+          // (covers the case where we merged into existing target rows)
+          db.prepare(
+            "DELETE FROM behavioral_adjustments WHERE category_id = ?",
+          ).run(sourceCategoryId);
+
+          // 3. Delete the source category
+          categoryRepo.delete(sourceCategoryId);
+        });
+
+        mergeTransaction();
+
+        res.json({
+          message: `Category "${sourceCategory.name}" merged into "${targetCategory.name}"`,
+          targetCategoryId,
+        });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  // -----------------------------------------------------------------------
+  // PATCH /api/categories/:categoryId — Rename a category (Req 9.1–9.4, 10.3–10.5)
+  // -----------------------------------------------------------------------
+
+  app.patch(
+    "/api/categories/:categoryId",
+    (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const categoryId = Number(req.params.categoryId);
+        const { name } = req.body;
+
+        if (!name || typeof name !== "string" || name.trim() === "") {
+          res.status(400).json({ error: "Missing required field: name" });
+          return;
+        }
+
+        const updated = categoryRepo.rename(categoryId, name.trim());
+        res.json(updated);
+      } catch (err) {
+        if (err instanceof Error) {
+          if (err.message === "Category not found") {
+            res.status(404).json({ error: err.message });
+            return;
+          }
+          if (err.message === "A category with this name already exists") {
+            res.status(409).json({ error: err.message });
+            return;
+          }
+        }
+        next(err);
+      }
+    },
+  );
 
   // -----------------------------------------------------------------------
   // POST /api/tasks/parse — Parse raw text into task list (Req 1.1, 1.3)

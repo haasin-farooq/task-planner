@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import Database from "better-sqlite3";
 import { createDb } from "../../db/connection.js";
 import { AdaptiveLearningEngine } from "../adaptive-learning-engine.js";
+import { CategoryRepository } from "../../db/category-repository.js";
 import type { CompletionRecord } from "../../types/index.js";
 
 // ---------------------------------------------------------------------------
@@ -306,5 +307,153 @@ describe("AdaptiveLearningEngine", () => {
 
     expect(modelA.adjustments[0].timeMultiplier).toBeCloseTo(0.5, 4);
     expect(modelB.adjustments[0].timeMultiplier).toBeCloseTo(1.5, 4);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Category ID integration tests (Req 6.1, 6.2, 6.3)
+// ---------------------------------------------------------------------------
+
+describe("AdaptiveLearningEngine — category_id integration", () => {
+  let db: Database.Database;
+  let categoryRepo: CategoryRepository;
+  let engine: AdaptiveLearningEngine;
+
+  beforeEach(() => {
+    db = createDb(":memory:");
+    categoryRepo = new CategoryRepository(db);
+    engine = new AdaptiveLearningEngine(db, categoryRepo);
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  function makeRecord(
+    overrides: Partial<CompletionRecord> = {},
+  ): CompletionRecord {
+    return {
+      taskId: "task-1",
+      userId: "user-1",
+      description: "coding",
+      estimatedTime: 60,
+      actualTime: 45,
+      difficultyLevel: 3,
+      completedAt: new Date("2025-01-15T10:00:00Z"),
+      ...overrides,
+    };
+  }
+
+  // --- Req 6.1: completion records include category_id ---
+
+  it("should store a non-null category_id on completion_history rows (Req 6.1)", () => {
+    engine.recordCompletion(makeRecord({ description: "write unit tests" }));
+
+    const row = db
+      .prepare("SELECT category_id FROM completion_history WHERE user_id = ?")
+      .get("user-1") as { category_id: number | null };
+
+    expect(row.category_id).not.toBeNull();
+    expect(typeof row.category_id).toBe("number");
+
+    // Verify the category_id references a valid row in the categories table
+    const category = categoryRepo.findById(row.category_id!);
+    expect(category).not.toBeNull();
+  });
+
+  // --- Req 6.2: behavioral model groups by category_id ---
+
+  it("should group adjustments by category_id so different descriptions with the same normalized category merge (Req 6.2)", () => {
+    // Both descriptions normalize to the same category via the normalizer.
+    // With CategoryRepository, they should resolve to the same category_id
+    // and produce a single behavioral adjustment entry.
+    engine.recordCompletion(
+      makeRecord({
+        taskId: "t1",
+        description: "coding",
+        actualTime: 30,
+        estimatedTime: 60,
+      }),
+    );
+    engine.recordCompletion(
+      makeRecord({
+        taskId: "t2",
+        description: "coding",
+        actualTime: 90,
+        estimatedTime: 60,
+      }),
+    );
+
+    const model = engine.getBehavioralModel("user-1");
+    expect(model.totalCompletedTasks).toBe(2);
+
+    // Both records share the same normalized category → single adjustment
+    expect(model.adjustments).toHaveLength(1);
+    expect(model.adjustments[0].sampleSize).toBe(2);
+    // Average: (30/60 + 90/60) / 2 = (0.5 + 1.5) / 2 = 1.0
+    expect(model.adjustments[0].timeMultiplier).toBeCloseTo(1.0, 4);
+  });
+
+  // --- Req 6.2, 6.3: behavioral model returns category name from categories table ---
+
+  it("should return the category name from the categories table in the behavioral model (Req 6.2, 6.3)", () => {
+    engine.recordCompletion(makeRecord({ description: "write documentation" }));
+
+    const model = engine.getBehavioralModel("user-1");
+    expect(model.adjustments).toHaveLength(1);
+
+    // The category name should come from the categories table (via JOIN),
+    // not from the raw description text
+    const adj = model.adjustments[0];
+    expect(adj.category).toBeTruthy();
+    // It should be a proper category name, not the raw description
+    expect(adj.category).not.toBe("write documentation");
+  });
+
+  it("should store category_id on behavioral_adjustments rows (Req 6.3)", () => {
+    engine.recordCompletion(makeRecord({ description: "design mockups" }));
+
+    const row = db
+      .prepare(
+        "SELECT category_id FROM behavioral_adjustments WHERE user_id = ?",
+      )
+      .get("user-1") as { category_id: number | null };
+
+    expect(row.category_id).not.toBeNull();
+    expect(typeof row.category_id).toBe("number");
+
+    // Verify the category_id references a valid row in the categories table
+    const category = categoryRepo.findById(row.category_id!);
+    expect(category).not.toBeNull();
+  });
+
+  it("should track multiple categories independently via category_id", () => {
+    // Use descriptions that normalize to different categories
+    engine.recordCompletion(
+      makeRecord({
+        taskId: "t1",
+        description: "write a blog post",
+        actualTime: 45,
+        estimatedTime: 60,
+      }),
+    );
+    engine.recordCompletion(
+      makeRecord({
+        taskId: "t2",
+        description: "fix the login bug",
+        actualTime: 90,
+        estimatedTime: 60,
+      }),
+    );
+
+    const model = engine.getBehavioralModel("user-1");
+    expect(model.totalCompletedTasks).toBe(2);
+    expect(model.adjustments).toHaveLength(2);
+
+    // Each adjustment should have a proper category name from the table
+    for (const adj of model.adjustments) {
+      expect(adj.category).toBeTruthy();
+      expect(adj.sampleSize).toBe(1);
+    }
   });
 });

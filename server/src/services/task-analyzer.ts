@@ -28,6 +28,8 @@ import {
   detectCycles,
 } from "../utils/dependency-graph.js";
 import { AdaptiveLearningEngine } from "./adaptive-learning-engine.js";
+import type { AICategoryAssigner } from "./ai-category-assigner.js";
+import type { CategoryRepository } from "../db/category-repository.js";
 
 // ---------------------------------------------------------------------------
 // LLM prompt
@@ -116,15 +118,21 @@ export class TaskAnalyzer {
   private client: OpenAI;
   private model: string;
   private learningEngine: AdaptiveLearningEngine;
+  private categoryAssigner?: AICategoryAssigner;
+  private categoryRepo?: CategoryRepository;
 
   constructor(
     learningEngine: AdaptiveLearningEngine,
     client?: OpenAI,
     model?: string,
+    categoryAssigner?: AICategoryAssigner,
+    categoryRepo?: CategoryRepository,
   ) {
     this.learningEngine = learningEngine;
     this.client = client ?? new OpenAI();
     this.model = model ?? "gpt-4o-mini";
+    this.categoryAssigner = categoryAssigner;
+    this.categoryRepo = categoryRepo;
   }
 
   /**
@@ -211,6 +219,22 @@ export class TaskAnalyzer {
 
     // 6. Detect circular dependencies (Req 2.6)
     const circularDependencies = detectCycles(analyzedTasks);
+
+    // 7. Assign categories via AI when dependencies are available (Req 5.1, 5.2, 5.3, 5.4)
+    if (this.categoryAssigner && this.categoryRepo) {
+      const categoryNames = this.categoryRepo.getAllNames();
+      for (const analyzedTask of analyzedTasks) {
+        const assignmentResult = await this.categoryAssigner.assign(
+          analyzedTask.description,
+          categoryNames,
+        );
+        const categoryEntity = this.categoryRepo.upsertByName(
+          assignmentResult.finalCategory,
+        );
+        analyzedTask.category = categoryEntity.name;
+        analyzedTask.categoryId = categoryEntity.id;
+      }
+    }
 
     return {
       tasks: analyzedTasks,

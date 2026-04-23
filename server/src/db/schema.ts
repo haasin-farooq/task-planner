@@ -68,6 +68,12 @@ CREATE TABLE IF NOT EXISTS behavioral_adjustments (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (user_id, category)
 );
+
+CREATE TABLE IF NOT EXISTS categories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 `;
 
 /**
@@ -91,6 +97,26 @@ export function runMigrations(db: import("better-sqlite3").Database): void {
   db.pragma("foreign_keys = ON");
   db.exec(SCHEMA_SQL);
 
+  // Seed canonical categories
+  const seedCategories = db.prepare(
+    "INSERT OR IGNORE INTO categories (name) VALUES (?)",
+  );
+  const canonicalCategories = [
+    "Writing",
+    "Development",
+    "Design",
+    "Research",
+    "Admin",
+    "Communication",
+    "Planning",
+    "Testing",
+    "Learning",
+    "Other",
+  ];
+  for (const name of canonicalCategories) {
+    seedCategories.run(name);
+  }
+
   // Migration: add normalized_category column to completion_history
   if (!columnExists(db, "completion_history", "normalized_category")) {
     db.exec(
@@ -98,6 +124,40 @@ export function runMigrations(db: import("better-sqlite3").Database): void {
     );
   }
 
+  // Migration: add category_id column to completion_history
+  if (!columnExists(db, "completion_history", "category_id")) {
+    db.exec(
+      "ALTER TABLE completion_history ADD COLUMN category_id INTEGER REFERENCES categories(id) DEFAULT NULL",
+    );
+  }
+
+  // Migration: add category_id column to behavioral_adjustments
+  if (!columnExists(db, "behavioral_adjustments", "category_id")) {
+    db.exec(
+      "ALTER TABLE behavioral_adjustments ADD COLUMN category_id INTEGER REFERENCES categories(id) DEFAULT NULL",
+    );
+  }
+
   // Backfill normalized_category for any existing records that lack one
   backfill(db);
+
+  // Backfill category_id on completion_history by matching normalized_category against categories.name
+  db.exec(`
+    UPDATE completion_history
+    SET category_id = (
+      SELECT c.id FROM categories c WHERE c.name = completion_history.normalized_category
+    )
+    WHERE category_id IS NULL
+      AND normalized_category IS NOT NULL
+  `);
+
+  // Backfill category_id on behavioral_adjustments by matching category against categories.name
+  db.exec(`
+    UPDATE behavioral_adjustments
+    SET category_id = (
+      SELECT c.id FROM categories c WHERE c.name = behavioral_adjustments.category
+    )
+    WHERE category_id IS NULL
+      AND category IS NOT NULL
+  `);
 }

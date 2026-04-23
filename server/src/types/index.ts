@@ -27,6 +27,23 @@ export interface ParseResult {
   errors: string[];
 }
 
+// --- Category Entities ---
+
+export interface CategoryEntity {
+  id: number;
+  name: string;
+  createdAt: string;
+}
+
+export interface CategoryAssignmentResult {
+  /** The raw string returned by the LLM, or null if fallback was used */
+  rawLLMCategory: string | null;
+  /** The resolved category name (existing or newly created) */
+  finalCategory: string;
+  /** Whether the LLM proposed a new category (not in the existing list) */
+  isNew: boolean;
+}
+
 // --- Task Analyzer ---
 
 export interface TaskMetrics {
@@ -44,6 +61,10 @@ export interface TaskMetrics {
 
 export interface AnalyzedTask extends ParsedTask {
   metrics: TaskMetrics;
+  /** Final category name from AI assignment or fallback */
+  category?: string;
+  /** Foreign key to categories table */
+  categoryId?: number;
 }
 
 export interface CircularDependencyError {
