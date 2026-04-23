@@ -351,7 +351,7 @@ function PlannerView({ onTaskDataChange }: PlannerViewProps) {
 
 function AnalyticsView() {
   return (
-    <div className="max-w-3xl mx-auto px-4">
+    <div className="max-w-3xl mx-auto px-4 pb-8">
       <AnalyticsDashboard userId={USER_ID} />
     </div>
   );

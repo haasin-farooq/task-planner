@@ -80,11 +80,7 @@ export default function AnalyticsDashboard({
   const daysOfData = summary?.dataStatus?.daysOfData ?? 0;
 
   return (
-    <section
-      aria-label="Analytics dashboard"
-      className="space-y-8"
-      style={{ backgroundColor: "#FFF8F0" }}
-    >
+    <section aria-label="Analytics dashboard" className="space-y-6 pb-12">
       <h2 className="font-serif text-2xl font-bold text-[#1A1A1A]">
         Analytics Dashboard
       </h2>

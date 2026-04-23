@@ -134,7 +134,7 @@ export default function InsightsPanel({
         Behavioral Insights
       </h3>
       <ul
-        className="flex flex-col gap-3 rounded-lg p-4"
+        className="flex flex-col gap-3 rounded-lg p-5 border border-[#E8E4DF]"
         style={{ backgroundColor: "#FFF8F0" }}
       >
         {displayedInsights.map((insight, index) => (
