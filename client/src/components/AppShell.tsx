@@ -7,7 +7,7 @@ import { useTaskData } from "../App";
 /**
  * AppShell — root layout component replacing the old NavBar + <main> structure.
  *
- * Renders a three-panel dark-themed dashboard:
+ * Renders a three-panel warm-themed dashboard:
  *   LeftSidebar | MainContent (<Outlet />) | RightSidebar
  *
  * Manages mobile sidebar toggle state via a hamburger button.
@@ -33,49 +33,47 @@ export default function AppShell(): JSX.Element {
   }, []);
 
   return (
-    <div className="dark">
-      <div className="flex flex-col md:flex-row h-screen w-screen bg-dark-bg overflow-hidden">
-        {/* Left sidebar navigation — hidden on mobile, visible at md+ as sticky sidebar */}
-        <LeftSidebar isOpen={sidebarOpen} onClose={handleCloseSidebar} />
+    <div className="flex flex-col md:flex-row h-screen w-screen bg-dark-bg overflow-hidden">
+      {/* Left sidebar navigation — hidden on mobile, visible at md+ as sticky sidebar */}
+      <LeftSidebar isOpen={sidebarOpen} onClose={handleCloseSidebar} />
 
-        {/* Scrollable content area: on mobile scrolls main + stacked right sidebar together */}
-        <main className="flex-1 overflow-y-auto pt-6">
-          {/* Mobile hamburger button — visible only below md breakpoint */}
-          <div className="md:hidden flex items-center px-4 py-3 bg-dark-surface border-b border-dark-border">
-            <button
-              type="button"
-              aria-label="Open navigation menu"
-              onClick={handleOpenSidebar}
-              className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-dark-card transition-colors"
+      {/* Scrollable content area: on mobile scrolls main + stacked right sidebar together */}
+      <main className="flex-1 overflow-y-auto pt-6">
+        {/* Mobile hamburger button — visible only below md breakpoint */}
+        <div className="md:hidden flex items-center px-4 py-3 bg-dark-surface border-b border-dark-border">
+          <button
+            type="button"
+            aria-label="Open navigation menu"
+            onClick={handleOpenSidebar}
+            className="p-2 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-dark-border transition-colors"
+          >
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
             >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M4 6h16M4 12h16M4 18h16"
-                />
-              </svg>
-            </button>
-          </div>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M4 6h16M4 12h16M4 18h16"
+              />
+            </svg>
+          </button>
+        </div>
 
-          <Outlet />
+        <Outlet />
 
-          {/* Mobile-only: RightSidebar content stacked below main content */}
-          <div className="md:hidden">
-            <RightSidebar tasks={tasks} completedTaskIds={completedTaskIds} />
-          </div>
-        </main>
-
-        {/* Desktop right sidebar — visible only at lg (≥1024px) as a fixed-width column */}
-        <div className="hidden lg:block">
+        {/* Mobile-only: RightSidebar content stacked below main content */}
+        <div className="md:hidden">
           <RightSidebar tasks={tasks} completedTaskIds={completedTaskIds} />
         </div>
+      </main>
+
+      {/* Desktop right sidebar — visible only at lg (≥1024px) as a fixed-width column */}
+      <div className="hidden lg:block">
+        <RightSidebar tasks={tasks} completedTaskIds={completedTaskIds} />
       </div>
     </div>
   );

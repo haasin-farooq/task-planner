@@ -35,17 +35,17 @@ export default function UnblockedNotification({
       role="status"
       aria-live="polite"
       data-testid="unblocked-notification"
-      className="fixed bottom-6 right-6 max-w-[22rem] p-4 bg-dark-card border border-accent-light rounded-xl shadow-lg shadow-black/25 z-[1001]"
+      className="fixed bottom-6 right-6 max-w-[22rem] p-4 bg-white border-l-4 border-accent rounded-xl shadow-lg shadow-black/10 z-[1001]"
     >
       <div className="flex justify-between items-start">
-        <strong className="text-accent-light">
+        <strong className="text-accent">
           🔓 {unblockedTasks.length} task
           {unblockedTasks.length !== 1 ? "s" : ""} unblocked
         </strong>
         <button
           onClick={onDismiss}
           aria-label="Dismiss notification"
-          className="bg-transparent border-none cursor-pointer text-xl leading-none text-gray-400 p-0 hover:text-gray-200"
+          className="bg-transparent border-none cursor-pointer text-xl leading-none text-[#6B6B6B] p-0 hover:text-[#1A1A1A]"
         >
           ×
         </button>
@@ -54,7 +54,7 @@ export default function UnblockedNotification({
       <ul
         role="list"
         aria-label="Unblocked tasks"
-        className="mt-2 pl-5 text-sm text-gray-300"
+        className="mt-2 pl-5 text-sm text-[#6B6B6B]"
       >
         {unblockedTasks.map((t) => (
           <li key={t.id}>{t.description}</li>

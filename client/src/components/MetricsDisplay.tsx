@@ -32,7 +32,7 @@ export default function MetricsDisplay({
   if (tasks.length === 0) {
     return (
       <section aria-label="Task metrics">
-        <p className="text-gray-400">No tasks to display.</p>
+        <p className="text-[#6B6B6B]">No tasks to display.</p>
       </section>
     );
   }
@@ -48,8 +48,8 @@ export default function MetricsDisplay({
     <section aria-label="Task metrics">
       {/* Parsed tasks header with Sort by dropdown integration — Req 6.3 */}
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-100">Parsed tasks</h2>
-        <span className="text-sm text-gray-400">Sort by</span>
+        <h2 className="text-lg font-semibold text-[#1A1A1A]">Parsed tasks</h2>
+        <span className="text-sm text-[#6B6B6B]">Sort by</span>
       </div>
 
       <ul
@@ -69,8 +69,8 @@ export default function MetricsDisplay({
               aria-current={isSelected ? "true" : undefined}
               className={`cursor-pointer rounded-lg border p-3 transition-colors ${
                 isSelected
-                  ? "border-accent bg-dark-card"
-                  : "border-dark-border bg-dark-card hover:border-gray-500"
+                  ? "border-accent bg-white shadow-sm"
+                  : "border-dark-border bg-white hover:border-gray-400"
               } ${isCompleted ? "opacity-50" : "opacity-100"}`}
               onClick={() => handleTaskClick(task.id)}
               onKeyDown={(e) => {
@@ -99,7 +99,9 @@ export default function MetricsDisplay({
                   className="mt-3 border-t border-dark-border pt-3 pl-9"
                   aria-label="Dependency list"
                 >
-                  <strong className="text-sm text-gray-300">Depends on:</strong>
+                  <strong className="text-sm text-[#1A1A1A]">
+                    Depends on:
+                  </strong>
                   <ul
                     role="list"
                     aria-label="Dependencies"
@@ -109,7 +111,7 @@ export default function MetricsDisplay({
                       <li
                         key={depId}
                         data-testid={`dep-${task.id}-${depId}`}
-                        className="text-sm text-gray-400"
+                        className="text-sm text-[#6B6B6B]"
                       >
                         {taskDescriptionById.get(depId) ?? depId}
                       </li>
@@ -123,7 +125,7 @@ export default function MetricsDisplay({
       </ul>
 
       {/* Footer note — Req 6.4 */}
-      <p className="mt-4 text-center text-xs text-gray-500">
+      <p className="mt-4 text-center text-xs text-[#6B6B6B]">
         Tasks are AI-generated and may need review.
       </p>
     </section>

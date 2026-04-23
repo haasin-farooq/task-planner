@@ -5,7 +5,7 @@ export interface DifficultyRatingProps {
 /**
  * Pure component that renders 5 dots representing a difficulty level.
  *
- * Filled dots use accent-light (violet) and unfilled dots use dark-border (muted).
+ * Filled dots use warm orange/coral and unfilled dots use warm gray.
  * Each dot is an 8×8px circle rendered with Tailwind utility classes.
  *
  * Requirements: 5.6, 10.5
@@ -22,7 +22,7 @@ export default function DifficultyRating({ level }: DifficultyRatingProps) {
         <span
           key={i}
           className={`inline-block h-2 w-2 rounded-full ${
-            i < clamped ? "bg-accent-light" : "bg-dark-border"
+            i < clamped ? "bg-accent" : "bg-dark-border"
           }`}
         />
       ))}

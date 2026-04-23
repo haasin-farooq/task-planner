@@ -117,12 +117,12 @@ export default function StrategySelector({
   // -------------------------------------------------------------------
   return (
     <section aria-label="Prioritization strategy">
-      <h3 className="text-sm font-semibold text-gray-300 mb-2">
+      <h3 className="text-sm font-semibold text-[#6B6B6B] mb-2">
         Sort Strategy
       </h3>
 
       {loading ? (
-        <p className="text-sm text-gray-400" aria-live="polite">
+        <p className="text-sm text-[#6B6B6B]" aria-live="polite">
           Loading preference…
         </p>
       ) : (
@@ -141,10 +141,10 @@ export default function StrategySelector({
                 aria-pressed={isActive}
                 aria-label={`Sort by ${label}`}
                 className={[
-                  "px-3 py-2 rounded-md text-sm transition-colors",
+                  "px-3 py-2 rounded-full text-sm transition-colors",
                   isActive
-                    ? "border-2 border-accent bg-accent/20 text-white font-semibold"
-                    : "border border-dark-border bg-dark-card text-gray-300 hover:bg-dark-surface hover:text-white",
+                    ? "bg-[#2A2A2A] text-white font-semibold"
+                    : "border border-dark-border bg-white text-[#6B6B6B] hover:bg-dark-bg hover:text-[#1A1A1A]",
                   saving ? "cursor-not-allowed opacity-60" : "cursor-pointer",
                 ].join(" ")}
               >
@@ -156,7 +156,7 @@ export default function StrategySelector({
       )}
 
       {saving && (
-        <p className="text-xs text-gray-500 mt-1" aria-live="polite">
+        <p className="text-xs text-[#6B6B6B] mt-1" aria-live="polite">
           Saving…
         </p>
       )}
@@ -165,7 +165,7 @@ export default function StrategySelector({
         <p
           role="alert"
           aria-live="assertive"
-          className="text-sm text-red-400 mt-1"
+          className="text-sm text-red-500 mt-1"
         >
           {error}
         </p>

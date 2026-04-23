@@ -33,7 +33,7 @@ export function getProgressSegments(
       {
         label: "Remaining",
         count: 0,
-        color: "#3a3a5a",
+        color: "#E8E4DF",
         dashLength: circumference,
         dashOffset: 0,
       },
@@ -45,7 +45,7 @@ export function getProgressSegments(
   const segments: ProgressSegment[] = [
     { label: "Done", count: completed, color: "#22c55e" },
     { label: "In Progress", count: inProgress, color: "#f97316" },
-    { label: "Planned", count: planned, color: "#7c3aed" },
+    { label: "Planned", count: planned, color: "#E8734A" },
   ] as ProgressSegment[];
 
   let offset = 0;
