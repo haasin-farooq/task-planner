@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import axios from "axios";
 import StrategySelector from "../StrategySelector";
-import type { AnalyzedTask, PrioritizationStrategy } from "../../types";
+import type { AnalyzedTask } from "../../types";
 
 vi.mock("axios");
 const mockedAxios = vi.mocked(axios, true);

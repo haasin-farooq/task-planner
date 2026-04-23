@@ -5,6 +5,8 @@
  * enforce valid ranges for priority (1-5), difficulty (1-5), and effort (0-100).
  */
 
+import { backfill } from "../utils/category-normalizer.js";
+
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
@@ -69,6 +71,18 @@ CREATE TABLE IF NOT EXISTS behavioral_adjustments (
 `;
 
 /**
+ * Check whether a column exists on a table.
+ */
+function columnExists(
+  db: import("better-sqlite3").Database,
+  table: string,
+  column: string,
+): boolean {
+  const cols = db.pragma(`table_info(${table})`) as { name: string }[];
+  return cols.some((c) => c.name === column);
+}
+
+/**
  * Run the schema migration against the given database instance.
  * Uses `exec` so all statements run in a single call.
  */
@@ -76,4 +90,14 @@ export function runMigrations(db: import("better-sqlite3").Database): void {
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
   db.exec(SCHEMA_SQL);
+
+  // Migration: add normalized_category column to completion_history
+  if (!columnExists(db, "completion_history", "normalized_category")) {
+    db.exec(
+      "ALTER TABLE completion_history ADD COLUMN normalized_category TEXT DEFAULT NULL",
+    );
+  }
+
+  // Backfill normalized_category for any existing records that lack one
+  backfill(db);
 }

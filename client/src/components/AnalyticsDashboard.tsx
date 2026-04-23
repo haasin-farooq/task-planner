@@ -1,21 +1,17 @@
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
-import type {
-  AnalyticsSummary,
-  DailyCompletionStat,
-  DifficultyBreakdown,
-  PerformanceCategory,
-} from "../types";
+import type { ExtendedAnalyticsSummary } from "../types";
+import KPIPanel from "./analytics/KPIPanel";
+import WeeklyTrends from "./analytics/WeeklyTrends";
+import CategoryPerformance from "./analytics/CategoryPerformance";
+import InsightsPanel from "./analytics/InsightsPanel";
+import EstimationAccuracy from "./analytics/EstimationAccuracy";
+import DifficultyCalibration from "./analytics/DifficultyCalibration";
+import RecentChanges from "./analytics/RecentChanges";
 
 export interface AnalyticsDashboardProps {
   /** Current user ID for fetching analytics. */
   userId: string;
-}
-
-/** Format a date string (YYYY-MM-DD) to a shorter locale label. */
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 /** Return today's date as YYYY-MM-DD. */
@@ -34,21 +30,27 @@ function daysAgoISO(n: number): string {
  * Analytics Dashboard component.
  *
  * Fetches analytics via GET /api/analytics/:userId with a selectable
- * date range and displays:
- * - Daily completion chart (text-based bar chart)
- * - Average actual vs estimated time comparison
- * - Difficulty breakdown
- * - Strengths and areas for improvement
- * - "Insufficient data" message when fewer than 5 tasks
+ * date range and displays decomposed dashboard sections:
+ * - KPI Panel (overview metrics)
+ * - Weekly Behavior Trends (line charts)
+ * - Category Performance (sortable table)
+ * - Behavioral Insights (natural language cards)
+ * - Estimation Accuracy (trend charts + label)
+ * - Difficulty & Effort Calibration (table)
+ * - Recent Behavioral Changes (lists + overruns)
  *
- * Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.7
+ * Preserves backward compatibility: the insufficient-data banner still
+ * renders when the base AnalyticsSummary flags it, and the zero-completed
+ * welcome state is handled.
+ *
+ * Requirements: 9.3, 10.1, 10.2, 10.3, 10.4, 10.6, 11.1, 11.2, 11.3, 11.4
  */
 export default function AnalyticsDashboard({
   userId,
 }: AnalyticsDashboardProps) {
   const [startDate, setStartDate] = useState(daysAgoISO(30));
   const [endDate, setEndDate] = useState(todayISO());
-  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
+  const [summary, setSummary] = useState<ExtendedAnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,7 +59,7 @@ export default function AnalyticsDashboard({
     setError(null);
 
     try {
-      const response = await axios.get<AnalyticsSummary>(
+      const response = await axios.get<ExtendedAnalyticsSummary>(
         `/api/analytics/${encodeURIComponent(userId)}`,
         { params: { startDate, endDate } },
       );
@@ -73,11 +75,21 @@ export default function AnalyticsDashboard({
     fetchAnalytics();
   }, [fetchAnalytics]);
 
-  return (
-    <section aria-label="Analytics dashboard" className="space-y-6">
-      <h2 className="text-2xl font-bold text-[#1A1A1A]">Analytics Dashboard</h2>
+  const totalCompleted = summary?.dataStatus?.totalCompletedTasks ?? 0;
+  const weeksOfData = summary?.dataStatus?.weeksOfData ?? 0;
+  const daysOfData = summary?.dataStatus?.daysOfData ?? 0;
 
-      {/* Date range selector — Req 7.1, 7.2, 7.3 */}
+  return (
+    <section
+      aria-label="Analytics dashboard"
+      className="space-y-8"
+      style={{ backgroundColor: "#FFF8F0" }}
+    >
+      <h2 className="font-serif text-2xl font-bold text-[#1A1A1A]">
+        Analytics Dashboard
+      </h2>
+
+      {/* Date range selector — Req 10.6 */}
       <DateRangeSelector
         startDate={startDate}
         endDate={endDate}
@@ -99,7 +111,7 @@ export default function AnalyticsDashboard({
 
       {summary && !loading && (
         <>
-          {/* Req 7.7 — insufficient data message */}
+          {/* Backward-compatible insufficient data banner */}
           {summary.insufficientData && (
             <div
               role="status"
@@ -112,17 +124,108 @@ export default function AnalyticsDashboard({
             </div>
           )}
 
-          {/* Req 7.1 — daily completion chart */}
-          <DailyCompletionChart dailyStats={summary.dailyStats} />
+          {/* Zero-completed-tasks welcome state — Req 9.3 */}
+          {totalCompleted === 0 && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="rounded-lg border border-[#E8E4DF] p-8 text-center"
+              style={{ backgroundColor: "#FFF8F0" }}
+            >
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#E8734A]/10">
+                <svg
+                  width="32"
+                  height="32"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
+                    stroke="#E8734A"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </div>
+              <h3 className="font-serif text-xl font-semibold text-[#1A1A1A]">
+                Welcome to Your Analytics Dashboard
+              </h3>
+              <p className="mt-2 text-sm text-[#6B6B6B] max-w-md mx-auto">
+                Start completing tasks to unlock insights about your
+                productivity patterns. Your data will appear here as you make
+                progress.
+              </p>
+            </div>
+          )}
 
-          {/* Req 7.2 — average time comparison */}
-          <TimeComparison dailyStats={summary.dailyStats} />
+          {/* Req 10.1 — Sections in order: KPI → Trends → Category → Insights → Accuracy → Calibration → Changes */}
 
-          {/* Req 7.3 — difficulty breakdown */}
-          <DifficultyBreakdownDisplay breakdown={summary.difficultyBreakdown} />
+          {/* KPI Panel — Req 2.1–2.7 */}
+          <KPIPanel
+            kpis={summary.kpis}
+            insufficientData={summary.insufficientData}
+            totalCompleted={totalCompleted}
+          />
 
-          {/* Req 7.4, 7.5 — strengths and areas for improvement */}
-          <PerformanceInsights categories={summary.performanceCategories} />
+          {/* Weekly Behavior Trends — Req 3.1–3.6 */}
+          {summary.weeklyTrends && (
+            <WeeklyTrends
+              weeklyTrends={summary.weeklyTrends}
+              weeksOfData={weeksOfData}
+            />
+          )}
+
+          {/* Category Performance — Req 4.1–4.5 */}
+          {summary.categoryPerformance && (
+            <CategoryPerformance
+              stats={summary.categoryPerformance.stats}
+              consistentlyFaster={
+                summary.categoryPerformance.consistentlyFaster
+              }
+              consistentlySlower={
+                summary.categoryPerformance.consistentlySlower
+              }
+            />
+          )}
+
+          {/* Behavioral Insights — Req 5.5, 5.6 */}
+          {summary.insights && (
+            <InsightsPanel
+              insights={summary.insights}
+              totalCompleted={totalCompleted}
+            />
+          )}
+
+          {/* Estimation Accuracy — Req 6.1–6.4 */}
+          {summary.estimationAccuracyTrend && (
+            <EstimationAccuracy
+              weeklyAccuracy={summary.estimationAccuracyTrend.weeklyAccuracy}
+              trendLabel={summary.estimationAccuracyTrend.trendLabel}
+              weeksOfData={weeksOfData}
+            />
+          )}
+
+          {/* Difficulty & Effort Calibration — Req 7.1–7.4 */}
+          {summary.difficultyCalibration && (
+            <DifficultyCalibration
+              calibration={summary.difficultyCalibration}
+            />
+          )}
+
+          {/* Recent Behavioral Changes — Req 8.1–8.5 */}
+          {summary.recentChanges && (
+            <RecentChanges
+              fasterCategories={summary.recentChanges.fasterCategories}
+              slowerCategories={summary.recentChanges.slowerCategories}
+              largestOverruns={summary.recentChanges.largestOverruns}
+              limitedDataCategories={
+                summary.recentChanges.limitedDataCategories
+              }
+              daysOfData={daysOfData}
+            />
+          )}
         </>
       )}
     </section>
@@ -145,7 +248,7 @@ function DateRangeSelector({
   onEndDateChange: (v: string) => void;
 }) {
   return (
-    <fieldset className="flex flex-wrap gap-4 items-center mb-6 border border-dark-border rounded-lg p-3 bg-white">
+    <fieldset className="flex flex-wrap gap-4 items-center mb-6 border border-[#E8E4DF] rounded-lg p-3 bg-white">
       <legend className="text-sm font-medium text-[#6B6B6B] px-1">
         Date Range
       </legend>
@@ -157,7 +260,7 @@ function DateRangeSelector({
           max={endDate}
           onChange={(e) => onStartDateChange(e.target.value)}
           aria-label="Start date"
-          className="ml-1 rounded-md border border-dark-border bg-dark-bg px-2 py-1 text-sm text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-accent"
+          className="ml-1 rounded-md border border-[#E8E4DF] bg-white px-2 py-1 text-sm text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-[#E8734A]"
         />
       </label>
       <label className="text-sm text-[#6B6B6B]">
@@ -169,326 +272,9 @@ function DateRangeSelector({
           max={todayISO()}
           onChange={(e) => onEndDateChange(e.target.value)}
           aria-label="End date"
-          className="ml-1 rounded-md border border-dark-border bg-dark-bg px-2 py-1 text-sm text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-accent"
+          className="ml-1 rounded-md border border-[#E8E4DF] bg-white px-2 py-1 text-sm text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-[#E8734A]"
         />
       </label>
     </fieldset>
-  );
-}
-
-/** Req 7.1 — tasks completed per day as a simple bar chart. */
-function DailyCompletionChart({
-  dailyStats,
-}: {
-  dailyStats: DailyCompletionStat[];
-}) {
-  if (dailyStats.length === 0) {
-    return null;
-  }
-
-  const maxCompleted = Math.max(...dailyStats.map((s) => s.tasksCompleted), 1);
-
-  return (
-    <div className="mb-6 rounded-lg bg-white border border-dark-border p-4">
-      <h3 className="text-lg font-semibold text-[#1A1A1A] mb-3">
-        Daily Completions
-      </h3>
-      <table
-        aria-label="Daily task completions"
-        className="w-full border-collapse"
-      >
-        <thead>
-          <tr className="border-b border-dark-border">
-            <th
-              scope="col"
-              className="text-left py-1 px-2 text-sm font-medium text-[#6B6B6B]"
-            >
-              Date
-            </th>
-            <th
-              scope="col"
-              className="text-left py-1 px-2 text-sm font-medium text-[#6B6B6B]"
-            >
-              Tasks
-            </th>
-            <th
-              scope="col"
-              className="text-left py-1 px-2 text-sm font-medium text-[#6B6B6B] w-[60%]"
-            >
-              &nbsp;
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {dailyStats.map((stat) => {
-            const pct = (stat.tasksCompleted / maxCompleted) * 100;
-            return (
-              <tr
-                key={stat.date}
-                data-testid={`daily-stat-${stat.date}`}
-                className="border-b border-dark-border/50 last:border-b-0"
-              >
-                <td className="py-1 px-2 whitespace-nowrap text-sm text-[#6B6B6B]">
-                  {formatDate(stat.date)}
-                </td>
-                <td className="py-1 px-2 text-right text-sm text-[#1A1A1A]">
-                  {stat.tasksCompleted}
-                </td>
-                <td className="py-1 px-2">
-                  <div
-                    role="img"
-                    aria-label={`${stat.tasksCompleted} tasks completed on ${formatDate(stat.date)}`}
-                    className={`h-4 rounded bg-accent ${stat.tasksCompleted > 0 ? "min-w-[4px]" : ""}`}
-                    style={{ width: `${pct}%` }}
-                  />
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-/** Req 7.2 — average actual vs estimated time comparison. */
-function TimeComparison({ dailyStats }: { dailyStats: DailyCompletionStat[] }) {
-  if (dailyStats.length === 0) {
-    return null;
-  }
-
-  const totalTasks = dailyStats.reduce((s, d) => s + d.tasksCompleted, 0);
-  if (totalTasks === 0) return null;
-
-  const weightedActual = dailyStats.reduce(
-    (s, d) => s + d.avgActualTime * d.tasksCompleted,
-    0,
-  );
-  const weightedEstimated = dailyStats.reduce(
-    (s, d) => s + d.avgEstimatedTime * d.tasksCompleted,
-    0,
-  );
-
-  const avgActual = weightedActual / totalTasks;
-  const avgEstimated = weightedEstimated / totalTasks;
-  const diff = avgActual - avgEstimated;
-  const diffLabel =
-    diff > 0
-      ? `${diff.toFixed(1)} min slower than estimated`
-      : diff < 0
-        ? `${Math.abs(diff).toFixed(1)} min faster than estimated`
-        : "Right on target";
-
-  return (
-    <div className="mb-6 rounded-lg bg-white border border-dark-border p-4">
-      <h3 className="text-lg font-semibold text-[#1A1A1A] mb-3">
-        Average Time Comparison
-      </h3>
-      <div
-        role="group"
-        aria-label="Time comparison"
-        className="flex gap-8 flex-wrap"
-      >
-        <div data-testid="avg-estimated-time">
-          <div className="text-sm text-[#6B6B6B]">Avg Estimated</div>
-          <div className="text-2xl font-semibold text-[#1A1A1A]">
-            {avgEstimated.toFixed(1)} min
-          </div>
-        </div>
-        <div data-testid="avg-actual-time">
-          <div className="text-sm text-[#6B6B6B]">Avg Actual</div>
-          <div className="text-2xl font-semibold text-[#1A1A1A]">
-            {avgActual.toFixed(1)} min
-          </div>
-        </div>
-        <div data-testid="time-diff">
-          <div className="text-sm text-[#6B6B6B]">Difference</div>
-          <div
-            className={`text-base font-medium ${
-              diff > 0
-                ? "text-red-500"
-                : diff < 0
-                  ? "text-green-600"
-                  : "text-[#6B6B6B]"
-            }`}
-          >
-            {diffLabel}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** Req 7.3 — breakdown of completed tasks by difficulty level. */
-function DifficultyBreakdownDisplay({
-  breakdown,
-}: {
-  breakdown: DifficultyBreakdown[];
-}) {
-  if (breakdown.length === 0) {
-    return null;
-  }
-
-  const total = breakdown.reduce((s, b) => s + b.count, 0);
-  const maxCount = Math.max(...breakdown.map((b) => b.count), 1);
-
-  const difficultyLabels: Record<number, string> = {
-    1: "Very Easy",
-    2: "Easy",
-    3: "Medium",
-    4: "Hard",
-    5: "Very Hard",
-  };
-
-  return (
-    <div className="mb-6 rounded-lg bg-white border border-dark-border p-4">
-      <h3 className="text-lg font-semibold text-[#1A1A1A] mb-3">
-        Difficulty Breakdown
-      </h3>
-      <table
-        aria-label="Task difficulty breakdown"
-        className="w-full border-collapse"
-      >
-        <thead>
-          <tr className="border-b border-dark-border">
-            <th
-              scope="col"
-              className="text-left py-1 px-2 text-sm font-medium text-[#6B6B6B]"
-            >
-              Difficulty
-            </th>
-            <th
-              scope="col"
-              className="text-right py-1 px-2 text-sm font-medium text-[#6B6B6B]"
-            >
-              Count
-            </th>
-            <th
-              scope="col"
-              className="text-right py-1 px-2 text-sm font-medium text-[#6B6B6B]"
-            >
-              %
-            </th>
-            <th
-              scope="col"
-              className="text-left py-1 px-2 text-sm font-medium text-[#6B6B6B] w-1/2"
-            >
-              &nbsp;
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {breakdown.map((b) => {
-            const pct = total > 0 ? (b.count / total) * 100 : 0;
-            const barPct = (b.count / maxCount) * 100;
-            return (
-              <tr
-                key={b.difficultyLevel}
-                data-testid={`difficulty-${b.difficultyLevel}`}
-                className="border-b border-dark-border/50 last:border-b-0"
-              >
-                <td className="py-1 px-2 text-sm text-[#6B6B6B]">
-                  {difficultyLabels[b.difficultyLevel] ??
-                    `Level ${b.difficultyLevel}`}
-                </td>
-                <td className="py-1 px-2 text-right text-sm text-[#1A1A1A]">
-                  {b.count}
-                </td>
-                <td className="py-1 px-2 text-right text-sm text-[#1A1A1A]">
-                  {pct.toFixed(0)}%
-                </td>
-                <td className="py-1 px-2">
-                  <div
-                    role="img"
-                    aria-label={`${b.count} tasks at ${difficultyLabels[b.difficultyLevel] ?? `level ${b.difficultyLevel}`}`}
-                    className={`h-4 rounded bg-accent ${b.count > 0 ? "min-w-[4px]" : ""}`}
-                    style={{ width: `${barPct}%` }}
-                  />
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-/** Req 7.4, 7.5 — strengths and areas for improvement. */
-function PerformanceInsights({
-  categories,
-}: {
-  categories: PerformanceCategory[];
-}) {
-  if (categories.length === 0) {
-    return null;
-  }
-
-  const strengths = categories.filter((c) => c.label === "strength");
-  const improvements = categories.filter(
-    (c) => c.label === "area-for-improvement",
-  );
-
-  return (
-    <div className="mb-6 rounded-lg bg-white border border-dark-border p-4">
-      <h3 className="text-lg font-semibold text-[#1A1A1A] mb-3">
-        Performance Insights
-      </h3>
-
-      <div className="flex gap-8 flex-wrap">
-        {/* Strengths — Req 7.5 */}
-        <div className="flex-1 min-w-[200px]">
-          <h4 className="text-green-600 font-medium mb-2">💪 Strengths</h4>
-          {strengths.length === 0 ? (
-            <p className="text-[#6B6B6B] text-sm">
-              No strengths identified yet.
-            </p>
-          ) : (
-            <ul role="list" aria-label="Strengths" className="space-y-2">
-              {strengths.map((c) => (
-                <li key={c.category} data-testid={`strength-${c.category}`}>
-                  <strong className="text-[#1A1A1A]">{c.category}</strong>
-                  <br />
-                  <span className="text-sm text-[#6B6B6B]">
-                    Avg {c.avgActualTime.toFixed(1)} min vs{" "}
-                    {c.avgEstimatedTime.toFixed(1)} min estimated
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {/* Areas for improvement — Req 7.4 */}
-        <div className="flex-1 min-w-[200px]">
-          <h4 className="text-red-500 font-medium mb-2">
-            🎯 Areas for Improvement
-          </h4>
-          {improvements.length === 0 ? (
-            <p className="text-[#6B6B6B] text-sm">
-              No areas for improvement identified.
-            </p>
-          ) : (
-            <ul
-              role="list"
-              aria-label="Areas for improvement"
-              className="space-y-2"
-            >
-              {improvements.map((c) => (
-                <li key={c.category} data-testid={`improvement-${c.category}`}>
-                  <strong className="text-[#1A1A1A]">{c.category}</strong>
-                  <br />
-                  <span className="text-sm text-[#6B6B6B]">
-                    Avg {c.avgActualTime.toFixed(1)} min vs{" "}
-                    {c.avgEstimatedTime.toFixed(1)} min estimated
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
-    </div>
   );
 }
