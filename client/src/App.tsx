@@ -1,4 +1,10 @@
-import { useState, useCallback, createContext, useContext } from "react";
+import {
+  useState,
+  useCallback,
+  useEffect,
+  createContext,
+  useContext,
+} from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import AppShell from "./components/AppShell";
@@ -10,7 +16,7 @@ import CompletionSummary from "./components/CompletionSummary";
 import UnblockedNotification from "./components/UnblockedNotification";
 import AnalyticsDashboard from "./components/AnalyticsDashboard";
 
-import { analyzeTasks } from "./api/client";
+import { analyzeTasks, getSessionTasks } from "./api/client";
 
 import type { AnalyzedTask, ParsedTask, PrioritizationStrategy } from "./types";
 
@@ -25,7 +31,10 @@ const USER_ID = "default-user";
 // App phases
 // ---------------------------------------------------------------------------
 
-type AppPhase = "input" | "analyzing" | "tasks";
+type AppPhase = "input" | "analyzing" | "tasks" | "restoring";
+
+/** localStorage key for persisting the active session ID. */
+const SESSION_STORAGE_KEY = "taskplanner_session_id";
 
 // ---------------------------------------------------------------------------
 // Shared task data context — lets PlannerView share state with AppShell
@@ -85,6 +94,48 @@ function PlannerView({ onTaskDataChange }: PlannerViewProps) {
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
 
   // -------------------------------------------------------------------
+  // Restore session from localStorage on mount
+  // -------------------------------------------------------------------
+
+  useEffect(() => {
+    const savedSessionId = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!savedSessionId) return;
+
+    let cancelled = false;
+    setPhase("restoring");
+
+    getSessionTasks(savedSessionId)
+      .then((result) => {
+        if (cancelled) return;
+
+        const completed = new Set(result.completedTaskIds);
+        const times = new Map(
+          Object.entries(result.actualTimes).map(
+            ([id, t]) => [id, t] as [string, number],
+          ),
+        );
+
+        setSessionId(result.sessionId);
+        setTasks(result.tasks);
+        setCompletedTaskIds(completed);
+        setActualTimes(times);
+        setPhase("tasks");
+        onTaskDataChange(result.tasks, completed);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Session no longer exists — clear stale key and show input
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+        setPhase("input");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // -------------------------------------------------------------------
   // Step 1 → 2: User confirms parsed tasks → analyze them
   // -------------------------------------------------------------------
 
@@ -101,6 +152,9 @@ function PlannerView({ onTaskDataChange }: PlannerViewProps) {
         setCompletedTaskIds(new Set());
         setActualTimes(new Map());
         setPhase("tasks");
+
+        // Persist session ID so it survives page refresh
+        localStorage.setItem(SESSION_STORAGE_KEY, result.sessionId);
 
         // Notify parent of new task data
         onTaskDataChange(result.tasks, new Set());
@@ -177,6 +231,7 @@ function PlannerView({ onTaskDataChange }: PlannerViewProps) {
     setCompletedTaskIds(new Set());
     setActualTimes(new Map());
     setAnalyzeError(null);
+    localStorage.removeItem(SESSION_STORAGE_KEY);
     onTaskDataChange([], new Set());
   }, [onTaskDataChange]);
 
@@ -220,6 +275,13 @@ function PlannerView({ onTaskDataChange }: PlannerViewProps) {
       {phase === "analyzing" && (
         <p aria-live="polite" className="text-center py-8 text-gray-300">
           Analyzing your tasks…
+        </p>
+      )}
+
+      {/* Phase: restoring session */}
+      {phase === "restoring" && (
+        <p aria-live="polite" className="text-center py-8 text-gray-300">
+          Restoring your session…
         </p>
       )}
 
@@ -296,32 +358,6 @@ function AnalyticsView() {
 }
 
 // ---------------------------------------------------------------------------
-// Placeholder views for new routes
-// ---------------------------------------------------------------------------
-
-function InsightsView() {
-  return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold text-white mb-2">Insights</h1>
-      <p className="text-gray-400">
-        Insights and recommendations will appear here in a future update.
-      </p>
-    </div>
-  );
-}
-
-function PreferencesView() {
-  return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold text-white mb-2">Preferences</h1>
-      <p className="text-gray-400">
-        User preferences and settings will be available here in a future update.
-      </p>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Root App with routing — AppShell as layout route
 // ---------------------------------------------------------------------------
 
@@ -348,8 +384,6 @@ function App() {
               element={<PlannerView onTaskDataChange={handleTaskDataChange} />}
             />
             <Route path="/analytics" element={<AnalyticsView />} />
-            <Route path="/insights" element={<InsightsView />} />
-            <Route path="/preferences" element={<PreferencesView />} />
           </Route>
         </Routes>
       </BrowserRouter>

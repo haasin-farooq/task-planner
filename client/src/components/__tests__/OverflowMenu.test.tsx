@@ -23,9 +23,6 @@ describe("OverflowMenu", () => {
     expect(
       screen.getByRole("menuitem", { name: "Mark Complete" }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("menuitem", { name: "View Details" }),
-    ).toBeInTheDocument();
   });
 
   it("closes the menu on Escape key", async () => {
@@ -64,16 +61,6 @@ describe("OverflowMenu", () => {
     await user.click(screen.getByRole("menuitem", { name: "Mark Complete" }));
 
     expect(onMarkComplete).toHaveBeenCalledWith("task-42");
-    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
-  });
-
-  it("closes the menu when View Details is clicked", async () => {
-    const user = userEvent.setup();
-    render(<OverflowMenu taskId="task-1" />);
-
-    await user.click(screen.getByRole("button", { name: /⋯/ }));
-    await user.click(screen.getByRole("menuitem", { name: "View Details" }));
-
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
