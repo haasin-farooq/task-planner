@@ -63,3 +63,109 @@ export interface AnalyticsSummary {
   dailyProgressPercent: number;
   insufficientData: boolean;
 }
+
+// --- Extended Analytics (Analytics Dashboard Redesign) ---
+
+/** Canonical category labels produced by CategoryNormalizer */
+export type CanonicalCategory =
+  | "Writing"
+  | "Development"
+  | "Design"
+  | "Research"
+  | "Admin"
+  | "Communication"
+  | "Planning"
+  | "Testing"
+  | "Learning"
+  | "Other";
+
+/** Weekly aggregation bucket for trend analysis */
+export interface WeeklyTrendPoint {
+  weekStart: string; // ISO date of Monday
+  weekEnd: string; // ISO date of Sunday
+  tasksCompleted: number;
+  totalActualTime: number;
+  avgActualTime: number;
+  avgEstimatedTime: number;
+  estimationAccuracy: number; // 0-1
+  avgAbsolutePercentError: number; // 0-100
+}
+
+/** Per-category performance stats */
+export interface CategoryPerformanceStat {
+  category: string; // canonical category
+  avgEstimatedTime: number;
+  avgActualTime: number;
+  avgTimeOverrun: number; // actual - estimated, in minutes
+  sampleSize: number;
+}
+
+/** A natural language behavioral insight */
+export interface BehavioralInsight {
+  text: string;
+  magnitude: number; // for ordering by significance
+  type: "underestimation" | "speed-improvement" | "accuracy-improvement";
+  category: string;
+}
+
+/** Per-difficulty-level calibration stats */
+export interface DifficultyCalibrationStat {
+  difficultyLevel: number; // 1-5
+  avgEstimatedTime: number;
+  avgActualTime: number;
+  avgTimeOverrun: number;
+  taskCount: number;
+}
+
+/** A recent behavioral change for a category */
+export interface CategoryChange {
+  category: string;
+  percentageChange: number; // negative = faster, positive = slower
+  recentAvgTime: number;
+  previousAvgTime: number;
+}
+
+/** A task with a large time overrun */
+export interface OverrunTask {
+  description: string;
+  estimatedTime: number;
+  actualTime: number;
+  overrunMinutes: number;
+}
+
+/** Extended analytics summary — superset of AnalyticsSummary */
+export interface ExtendedAnalyticsSummary extends AnalyticsSummary {
+  // New fields (all optional for backward compatibility)
+  kpis?: {
+    totalCompleted: number;
+    completionRate: number; // percentage
+    avgEstimatedTime: number;
+    avgActualTime: number;
+    estimationAccuracy: number; // percentage
+    topImprovingCategory: string | null;
+    mostDelayedCategory: string | null;
+  };
+  weeklyTrends?: WeeklyTrendPoint[];
+  categoryPerformance?: {
+    stats: CategoryPerformanceStat[];
+    consistentlyFaster: string[]; // category names
+    consistentlySlower: string[]; // category names
+  };
+  insights?: BehavioralInsight[];
+  estimationAccuracyTrend?: {
+    weeklyAccuracy: WeeklyTrendPoint[];
+    trendLabel: "Improving" | "Stable" | "Declining";
+  };
+  difficultyCalibration?: DifficultyCalibrationStat[];
+  recentChanges?: {
+    fasterCategories: CategoryChange[];
+    slowerCategories: CategoryChange[];
+    largestOverruns: OverrunTask[];
+    limitedDataCategories: string[];
+  };
+  dataStatus?: {
+    totalCompletedTasks: number;
+    weeksOfData: number;
+    daysOfData: number;
+  };
+}

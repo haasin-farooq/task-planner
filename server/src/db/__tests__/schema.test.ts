@@ -3,6 +3,107 @@ import Database from "better-sqlite3";
 import { runMigrations, SCHEMA_SQL } from "../schema.js";
 import { createDb } from "../connection.js";
 
+describe("Schema migration — normalized_category", () => {
+  let db: Database.Database;
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it("should add normalized_category column to completion_history after migration", () => {
+    db = createDb(":memory:");
+
+    const cols = db.pragma("table_info(completion_history)") as {
+      name: string;
+    }[];
+    const colNames = cols.map((c) => c.name);
+
+    expect(colNames).toContain("normalized_category");
+  });
+
+  it("should backfill normalized_category for existing records during migration", () => {
+    // Create a DB with the base schema but WITHOUT the normalized_category column
+    db = new Database(":memory:");
+    db.pragma("journal_mode = WAL");
+    db.pragma("foreign_keys = ON");
+    db.exec(SCHEMA_SQL);
+
+    // Insert pre-migration records (no normalized_category column yet)
+    db.exec("INSERT INTO users (id) VALUES ('u1')");
+    db.exec(`
+      INSERT INTO completion_history (id, user_id, task_description, category, estimated_time, actual_time, difficulty_level)
+      VALUES
+        ('c1', 'u1', 'Write blog post', 'writing', 30, 25, 2),
+        ('c2', 'u1', 'Fix login bug', 'coding', 60, 90, 4),
+        ('c3', 'u1', 'Random task', 'xyz', 15, 20, 1)
+    `);
+
+    // Now run migrations — this should add the column and backfill
+    runMigrations(db);
+
+    const rows = db
+      .prepare(
+        "SELECT id, normalized_category FROM completion_history ORDER BY id",
+      )
+      .all() as { id: string; normalized_category: string }[];
+
+    expect(rows).toEqual([
+      { id: "c1", normalized_category: "Writing" },
+      { id: "c2", normalized_category: "Development" },
+      { id: "c3", normalized_category: "Other" },
+    ]);
+  });
+
+  it("should preserve original category column values after backfill", () => {
+    // Create a DB with the base schema but WITHOUT the normalized_category column
+    db = new Database(":memory:");
+    db.pragma("journal_mode = WAL");
+    db.pragma("foreign_keys = ON");
+    db.exec(SCHEMA_SQL);
+
+    // Insert pre-migration records with various raw category values
+    db.exec("INSERT INTO users (id) VALUES ('u1')");
+    db.exec(`
+      INSERT INTO completion_history (id, user_id, task_description, category, estimated_time, actual_time, difficulty_level)
+      VALUES
+        ('c1', 'u1', 'Write blog post', 'My Custom Writing Category', 30, 25, 2),
+        ('c2', 'u1', 'Fix login bug', 'Backend Coding Work', 60, 90, 4),
+        ('c3', 'u1', 'Team sync', 'Weekly Meeting', 15, 20, 1)
+    `);
+
+    // Run migrations — backfill should NOT modify the original category column
+    runMigrations(db);
+
+    const rows = db
+      .prepare(
+        "SELECT id, category, normalized_category FROM completion_history ORDER BY id",
+      )
+      .all() as {
+      id: string;
+      category: string;
+      normalized_category: string;
+    }[];
+
+    expect(rows).toEqual([
+      {
+        id: "c1",
+        category: "My Custom Writing Category",
+        normalized_category: "Writing",
+      },
+      {
+        id: "c2",
+        category: "Backend Coding Work",
+        normalized_category: "Development",
+      },
+      {
+        id: "c3",
+        category: "Weekly Meeting",
+        normalized_category: "Communication",
+      },
+    ]);
+  });
+});
+
 describe("Database schema", () => {
   let db: Database.Database;
 

@@ -22,6 +22,7 @@ import type {
   BehavioralModel,
   CategoryAdjustment,
 } from "../types/index.js";
+import { normalize } from "../utils/category-normalizer.js";
 
 // ---------------------------------------------------------------------------
 // Row types for SQLite query results
@@ -71,17 +72,19 @@ export class AdaptiveLearningEngine {
         .run(record.userId);
 
       // 1. Insert into completion_history
+      const normalizedCategory = normalize(category);
       this.db
         .prepare(
           `INSERT INTO completion_history
-             (id, user_id, task_description, category, estimated_time, actual_time, difficulty_level, completed_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+             (id, user_id, task_description, category, normalized_category, estimated_time, actual_time, difficulty_level, completed_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           uuidv4(),
           record.userId,
           record.description,
           category,
+          normalizedCategory,
           record.estimatedTime,
           record.actualTime,
           record.difficultyLevel,

@@ -14,11 +14,22 @@
 
 import type Database from "better-sqlite3";
 import type {
-  AnalyticsSummary,
+  BehavioralInsight,
+  CategoryChange,
+  CategoryPerformanceStat,
   DailyCompletionStat,
   DifficultyBreakdown,
+  DifficultyCalibrationStat,
+  ExtendedAnalyticsSummary,
+  OverrunTask,
   PerformanceCategory,
+  WeeklyTrendPoint,
 } from "../types/index.js";
+import {
+  classifyTrend,
+  estimationAccuracy as computeEstimationAccuracy,
+  linearRegressionSlope,
+} from "../utils/trend-analysis.js";
 
 // ---------------------------------------------------------------------------
 // Row types for SQLite query results
@@ -55,6 +66,46 @@ interface TaskProgressRow {
   completed: number;
 }
 
+// Row types for extended analytics queries
+
+interface CompletionRow {
+  estimated_time: number;
+  actual_time: number;
+  completed_at: string;
+  normalized_category: string | null;
+  task_description: string;
+  difficulty_level: number;
+}
+
+interface WeeklyAggRow {
+  week_start: string;
+  tasks_completed: number;
+  total_actual_time: number;
+  avg_actual_time: number;
+  avg_estimated_time: number;
+}
+
+interface CategoryAggRow {
+  normalized_category: string;
+  avg_estimated_time: number;
+  avg_actual_time: number;
+  avg_time_overrun: number;
+  sample_size: number;
+}
+
+interface DifficultyAggRow {
+  difficulty_level: number;
+  avg_estimated_time: number;
+  avg_actual_time: number;
+  avg_time_overrun: number;
+  task_count: number;
+}
+
+interface DateRangeRow {
+  min_date: string | null;
+  max_date: string | null;
+}
+
 // ---------------------------------------------------------------------------
 // Aggregator
 // ---------------------------------------------------------------------------
@@ -75,15 +126,11 @@ export class AnalyticsAggregator {
   /**
    * Compute an analytics summary for the given user and date range.
    *
-   * - `dailyStats`: per-day task count, average actual time, average
-   *   estimated time (Req 7.1, 7.2).
-   * - `difficultyBreakdown`: count of completed tasks grouped by difficulty
-   *   level (Req 7.3).
-   * - `performanceCategories`: per-category comparison of actual vs estimated
-   *   time, labelled "strength" or "area-for-improvement" (Req 7.4, 7.5).
-   * - `insufficientData`: true when fewer than 5 completed tasks exist in the
-   *   range (Req 7.7).
-   * - `dailyProgressPercent`: progress for today's session (Req 7.6).
+   * Returns an `ExtendedAnalyticsSummary` that is a superset of the original
+   * `AnalyticsSummary`. All existing fields are preserved unchanged.
+   *
+   * New fields include: kpis, weeklyTrends, categoryPerformance, insights,
+   * estimationAccuracyTrend, difficultyCalibration, recentChanges, dataStatus.
    *
    * Dates are inclusive and expected in ISO format (YYYY-MM-DD).
    */
@@ -91,7 +138,8 @@ export class AnalyticsAggregator {
     userId: string,
     startDate: string,
     endDate: string,
-  ): AnalyticsSummary {
+  ): ExtendedAnalyticsSummary {
+    // --- Existing AnalyticsSummary fields (preserved unchanged) ---
     const dailyStats = this.getDailyStats(userId, startDate, endDate);
     const difficultyBreakdown = this.getDifficultyBreakdown(
       userId,
@@ -113,12 +161,62 @@ export class AnalyticsAggregator {
     // Daily progress for today (use endDate as the reference day)
     const dailyProgressPercent = this.getDailyProgress(userId, endDate);
 
+    // --- Extended analytics computations ---
+
+    // Fetch all completion records for the user in the date range
+    const allRecords = this.getAllCompletions(userId, startDate, endDate);
+
+    // KPIs (Req 2.1–2.7)
+    const kpis = this.computeKPIs(userId, allRecords, startDate, endDate);
+
+    // Weekly trends — last 8 weeks (Req 3.1–3.3)
+    const weeklyTrends = this.computeWeeklyTrends(userId, endDate);
+
+    // Category performance using normalized_category (Req 4.1–4.5)
+    const categoryPerformance = this.computeCategoryPerformance(
+      userId,
+      startDate,
+      endDate,
+    );
+
+    // Behavioral insights (Req 5.1–5.6)
+    const weeklyByCategory = this.computeWeeklyByCategory(userId, endDate);
+    const insights = generateInsights(
+      categoryPerformance.stats,
+      weeklyByCategory,
+    );
+
+    // Estimation accuracy trend (Req 6.1–6.4)
+    const estimationAccuracyTrend =
+      this.computeEstimationAccuracyTrend(weeklyTrends);
+
+    // Difficulty calibration (Req 7.1–7.4)
+    const difficultyCalibration = this.computeDifficultyCalibration(
+      userId,
+      startDate,
+      endDate,
+    );
+
+    // Recent changes (Req 8.1–8.5)
+    const recentChanges = this.computeRecentChanges(userId, endDate);
+
+    // Data status (Req 9.1–9.3)
+    const dataStatus = this.computeDataStatus(userId);
+
     return {
       dailyStats,
       difficultyBreakdown,
       performanceCategories,
       dailyProgressPercent,
       insufficientData,
+      kpis,
+      weeklyTrends,
+      categoryPerformance,
+      insights,
+      estimationAccuracyTrend,
+      difficultyCalibration,
+      recentChanges,
+      dataStatus,
     };
   }
 
@@ -293,4 +391,883 @@ export class AnalyticsAggregator {
 
     return row?.cnt ?? 0;
   }
+
+  // -----------------------------------------------------------------------
+  // Extended analytics helpers
+  // -----------------------------------------------------------------------
+
+  /**
+   * Fetch all completion records for a user in the date range.
+   */
+  private getAllCompletions(
+    userId: string,
+    startDate: string,
+    endDate: string,
+  ): CompletionRow[] {
+    return this.db
+      .prepare(
+        `SELECT estimated_time, actual_time, completed_at,
+                normalized_category, task_description, difficulty_level
+         FROM completion_history
+         WHERE user_id = ?
+           AND DATE(completed_at) >= ?
+           AND DATE(completed_at) <= ?
+         ORDER BY completed_at`,
+      )
+      .all(userId, startDate, endDate) as CompletionRow[];
+  }
+
+  /**
+   * Compute KPIs for the KPI panel (Req 2.1–2.7).
+   */
+  private computeKPIs(
+    userId: string,
+    records: CompletionRow[],
+    startDate: string,
+    endDate: string,
+  ): ExtendedAnalyticsSummary["kpis"] {
+    const totalCompleted = records.length;
+
+    // Completion rate: completed / planned tasks in sessions within the range
+    const plannedRow = this.db
+      .prepare(
+        `SELECT COUNT(*) as cnt FROM tasks t
+         JOIN task_sessions s ON t.session_id = s.id
+         WHERE s.user_id = ?
+           AND DATE(s.created_at) >= ?
+           AND DATE(s.created_at) <= ?`,
+      )
+      .get(userId, startDate, endDate) as CountRow | undefined;
+    const totalPlanned = plannedRow?.cnt ?? 0;
+    const completionRate =
+      totalPlanned > 0 ? (totalCompleted / totalPlanned) * 100 : 0;
+
+    // Average estimated and actual times
+    let sumEstimated = 0;
+    let sumActual = 0;
+    let accuracySum = 0;
+    let accuracyCount = 0;
+
+    for (const r of records) {
+      sumEstimated += r.estimated_time;
+      sumActual += r.actual_time;
+      if (r.estimated_time > 0) {
+        accuracySum += computeEstimationAccuracy(
+          r.estimated_time,
+          r.actual_time,
+        );
+        accuracyCount++;
+      }
+    }
+
+    const avgEstimatedTime =
+      totalCompleted > 0 ? sumEstimated / totalCompleted : 0;
+    const avgActualTime = totalCompleted > 0 ? sumActual / totalCompleted : 0;
+    const estAccuracy =
+      accuracyCount > 0 ? (accuracySum / accuracyCount) * 100 : 0;
+
+    // Top improving category (Req 2.5): largest improvement in estimation accuracy
+    // over last 4 weeks vs preceding 4 weeks
+    const topImprovingCategory = this.findTopImprovingCategory(userId, endDate);
+
+    // Most delayed category (Req 2.6): highest avg positive time overrun
+    const mostDelayedCategory = this.findMostDelayedCategory(
+      userId,
+      startDate,
+      endDate,
+    );
+
+    return {
+      totalCompleted,
+      completionRate,
+      avgEstimatedTime,
+      avgActualTime,
+      estimationAccuracy: estAccuracy,
+      topImprovingCategory,
+      mostDelayedCategory,
+    };
+  }
+
+  /**
+   * Find the category with the largest improvement in estimation accuracy
+   * over the last 4 weeks compared to the preceding 4 weeks.
+   */
+  private findTopImprovingCategory(
+    userId: string,
+    endDate: string,
+  ): string | null {
+    const end = new Date(endDate);
+    const recentStart = new Date(end);
+    recentStart.setDate(recentStart.getDate() - 28); // last 4 weeks
+    const previousStart = new Date(recentStart);
+    previousStart.setDate(previousStart.getDate() - 28); // preceding 4 weeks
+
+    const recentStartStr = recentStart.toISOString().split("T")[0];
+    const previousStartStr = previousStart.toISOString().split("T")[0];
+    const endStr = endDate;
+
+    // Get records for both periods
+    const recentRecords = this.getAllCompletions(
+      userId,
+      recentStartStr,
+      endStr,
+    );
+    const previousRecords = this.getAllCompletions(
+      userId,
+      previousStartStr,
+      recentStartStr,
+    );
+
+    // Compute per-category accuracy for each period
+    const recentAccuracy = this.categoryAccuracyMap(recentRecords);
+    const previousAccuracy = this.categoryAccuracyMap(previousRecords);
+
+    let bestCategory: string | null = null;
+    let bestImprovement = 0;
+
+    for (const [category, recentAcc] of recentAccuracy) {
+      const prevAcc = previousAccuracy.get(category);
+      if (prevAcc !== undefined) {
+        const improvement = recentAcc - prevAcc;
+        if (improvement > bestImprovement) {
+          bestImprovement = improvement;
+          bestCategory = category;
+        }
+      }
+    }
+
+    return bestCategory;
+  }
+
+  /**
+   * Compute average estimation accuracy per category from a set of records.
+   */
+  private categoryAccuracyMap(records: CompletionRow[]): Map<string, number> {
+    const categoryData = new Map<string, { sum: number; count: number }>();
+
+    for (const r of records) {
+      const cat = r.normalized_category ?? "Other";
+      if (r.estimated_time <= 0) continue;
+      const acc = computeEstimationAccuracy(r.estimated_time, r.actual_time);
+      const existing = categoryData.get(cat) ?? { sum: 0, count: 0 };
+      existing.sum += acc;
+      existing.count++;
+      categoryData.set(cat, existing);
+    }
+
+    const result = new Map<string, number>();
+    for (const [cat, data] of categoryData) {
+      result.set(cat, data.sum / data.count);
+    }
+    return result;
+  }
+
+  /**
+   * Find the category with the highest average positive time overrun.
+   */
+  private findMostDelayedCategory(
+    userId: string,
+    startDate: string,
+    endDate: string,
+  ): string | null {
+    const row = this.db
+      .prepare(
+        `SELECT normalized_category,
+                AVG(actual_time - estimated_time) as avg_overrun
+         FROM completion_history
+         WHERE user_id = ?
+           AND DATE(completed_at) >= ?
+           AND DATE(completed_at) <= ?
+           AND normalized_category IS NOT NULL
+         GROUP BY normalized_category
+         HAVING avg_overrun > 0
+         ORDER BY avg_overrun DESC
+         LIMIT 1`,
+      )
+      .get(userId, startDate, endDate) as
+      | { normalized_category: string; avg_overrun: number }
+      | undefined;
+
+    return row?.normalized_category ?? null;
+  }
+
+  /**
+   * Compute weekly trend data for the last 8 weeks (Req 3.1–3.3).
+   *
+   * Groups completion_history by ISO week, computing per-week aggregates.
+   */
+  private computeWeeklyTrends(
+    userId: string,
+    endDate: string,
+  ): WeeklyTrendPoint[] {
+    // Compute the start date: 8 weeks before endDate
+    const end = new Date(endDate);
+    const start = new Date(end);
+    start.setDate(start.getDate() - 56); // 8 weeks
+    const startStr = start.toISOString().split("T")[0];
+
+    // Fetch all records in the 8-week window
+    const records = this.getAllCompletions(userId, startStr, endDate);
+
+    // Group by ISO week
+    const weekMap = new Map<
+      string,
+      {
+        weekStart: string;
+        weekEnd: string;
+        estimated: number[];
+        actual: number[];
+      }
+    >();
+
+    for (const r of records) {
+      const date = new Date(r.completed_at);
+      const { weekStart, weekEnd } = getISOWeekRange(date);
+      const key = weekStart;
+
+      if (!weekMap.has(key)) {
+        weekMap.set(key, {
+          weekStart,
+          weekEnd,
+          estimated: [],
+          actual: [],
+        });
+      }
+
+      const week = weekMap.get(key)!;
+      week.estimated.push(r.estimated_time);
+      week.actual.push(r.actual_time);
+    }
+
+    // Convert to WeeklyTrendPoint array, sorted by weekStart
+    const points: WeeklyTrendPoint[] = [];
+    for (const [, week] of weekMap) {
+      const tasksCompleted = week.actual.length;
+      const totalActualTime = week.actual.reduce((s, v) => s + v, 0);
+      const avgActualTime = totalActualTime / tasksCompleted;
+      const avgEstimatedTime =
+        week.estimated.reduce((s, v) => s + v, 0) / tasksCompleted;
+
+      // Per-task estimation accuracy, averaged
+      let accSum = 0;
+      let accCount = 0;
+      let errorSum = 0;
+      for (let i = 0; i < tasksCompleted; i++) {
+        if (week.estimated[i] > 0) {
+          accSum += computeEstimationAccuracy(
+            week.estimated[i],
+            week.actual[i],
+          );
+          errorSum +=
+            (Math.abs(week.actual[i] - week.estimated[i]) / week.estimated[i]) *
+            100;
+          accCount++;
+        }
+      }
+
+      points.push({
+        weekStart: week.weekStart,
+        weekEnd: week.weekEnd,
+        tasksCompleted,
+        totalActualTime,
+        avgActualTime,
+        avgEstimatedTime,
+        estimationAccuracy: accCount > 0 ? accSum / accCount : 0,
+        avgAbsolutePercentError: accCount > 0 ? errorSum / accCount : 0,
+      });
+    }
+
+    points.sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+    return points;
+  }
+
+  /**
+   * Compute category performance stats using normalized_category (Req 4.1–4.5).
+   */
+  private computeCategoryPerformance(
+    userId: string,
+    startDate: string,
+    endDate: string,
+  ): NonNullable<ExtendedAnalyticsSummary["categoryPerformance"]> {
+    const rows = this.db
+      .prepare(
+        `SELECT
+           normalized_category,
+           AVG(estimated_time) as avg_estimated_time,
+           AVG(actual_time) as avg_actual_time,
+           AVG(actual_time - estimated_time) as avg_time_overrun,
+           COUNT(*) as sample_size
+         FROM completion_history
+         WHERE user_id = ?
+           AND DATE(completed_at) >= ?
+           AND DATE(completed_at) <= ?
+           AND normalized_category IS NOT NULL
+         GROUP BY normalized_category
+         ORDER BY normalized_category`,
+      )
+      .all(userId, startDate, endDate) as CategoryAggRow[];
+
+    const stats: CategoryPerformanceStat[] = rows.map((r) => ({
+      category: r.normalized_category,
+      avgEstimatedTime: r.avg_estimated_time,
+      avgActualTime: r.avg_actual_time,
+      avgTimeOverrun: r.avg_time_overrun,
+      sampleSize: r.sample_size,
+    }));
+
+    // Consistently faster: avg actual < avg estimated by ≥ 10%, with ≥ 3 tasks
+    const consistentlyFaster: string[] = [];
+    const consistentlySlower: string[] = [];
+
+    for (const stat of stats) {
+      if (stat.sampleSize < 3) continue;
+      if (stat.avgEstimatedTime <= 0) continue;
+
+      const ratio =
+        (stat.avgActualTime - stat.avgEstimatedTime) / stat.avgEstimatedTime;
+
+      if (ratio <= -0.1) {
+        consistentlyFaster.push(stat.category);
+      } else if (ratio >= 0.1) {
+        consistentlySlower.push(stat.category);
+      }
+    }
+
+    return { stats, consistentlyFaster, consistentlySlower };
+  }
+
+  /**
+   * Compute weekly data grouped by category for insight generation.
+   */
+  private computeWeeklyByCategory(
+    userId: string,
+    endDate: string,
+  ): Map<string, WeeklyTrendPoint[]> {
+    const end = new Date(endDate);
+    const start = new Date(end);
+    start.setDate(start.getDate() - 56); // 8 weeks
+    const startStr = start.toISOString().split("T")[0];
+
+    const records = this.getAllCompletions(userId, startStr, endDate);
+
+    // Group by category + week
+    const catWeekMap = new Map<
+      string,
+      Map<
+        string,
+        {
+          weekStart: string;
+          weekEnd: string;
+          estimated: number[];
+          actual: number[];
+        }
+      >
+    >();
+
+    for (const r of records) {
+      const cat = r.normalized_category ?? "Other";
+      const date = new Date(r.completed_at);
+      const { weekStart, weekEnd } = getISOWeekRange(date);
+
+      if (!catWeekMap.has(cat)) {
+        catWeekMap.set(cat, new Map());
+      }
+      const weekMap = catWeekMap.get(cat)!;
+
+      if (!weekMap.has(weekStart)) {
+        weekMap.set(weekStart, {
+          weekStart,
+          weekEnd,
+          estimated: [],
+          actual: [],
+        });
+      }
+
+      const week = weekMap.get(weekStart)!;
+      week.estimated.push(r.estimated_time);
+      week.actual.push(r.actual_time);
+    }
+
+    // Convert to Map<string, WeeklyTrendPoint[]>
+    const result = new Map<string, WeeklyTrendPoint[]>();
+
+    for (const [cat, weekMap] of catWeekMap) {
+      const points: WeeklyTrendPoint[] = [];
+
+      for (const [, week] of weekMap) {
+        const tasksCompleted = week.actual.length;
+        const totalActualTime = week.actual.reduce((s, v) => s + v, 0);
+        const avgActualTime = totalActualTime / tasksCompleted;
+        const avgEstimatedTime =
+          week.estimated.reduce((s, v) => s + v, 0) / tasksCompleted;
+
+        let accSum = 0;
+        let accCount = 0;
+        let errorSum = 0;
+        for (let i = 0; i < tasksCompleted; i++) {
+          if (week.estimated[i] > 0) {
+            accSum += computeEstimationAccuracy(
+              week.estimated[i],
+              week.actual[i],
+            );
+            errorSum +=
+              (Math.abs(week.actual[i] - week.estimated[i]) /
+                week.estimated[i]) *
+              100;
+            accCount++;
+          }
+        }
+
+        points.push({
+          weekStart: week.weekStart,
+          weekEnd: week.weekEnd,
+          tasksCompleted,
+          totalActualTime,
+          avgActualTime,
+          avgEstimatedTime,
+          estimationAccuracy: accCount > 0 ? accSum / accCount : 0,
+          avgAbsolutePercentError: accCount > 0 ? errorSum / accCount : 0,
+        });
+      }
+
+      points.sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+      result.set(cat, points);
+    }
+
+    return result;
+  }
+
+  /**
+   * Compute estimation accuracy trend with linear regression (Req 6.1–6.4).
+   */
+  private computeEstimationAccuracyTrend(
+    weeklyTrends: WeeklyTrendPoint[],
+  ): NonNullable<ExtendedAnalyticsSummary["estimationAccuracyTrend"]> {
+    const accuracyValues = weeklyTrends.map((w) => w.estimationAccuracy);
+    const slope = linearRegressionSlope(accuracyValues);
+    const trendLabel = classifyTrend(slope);
+
+    return {
+      weeklyAccuracy: weeklyTrends,
+      trendLabel,
+    };
+  }
+
+  /**
+   * Compute per-difficulty-level calibration stats (Req 7.1–7.4).
+   */
+  private computeDifficultyCalibration(
+    userId: string,
+    startDate: string,
+    endDate: string,
+  ): DifficultyCalibrationStat[] {
+    const rows = this.db
+      .prepare(
+        `SELECT
+           difficulty_level,
+           AVG(estimated_time) as avg_estimated_time,
+           AVG(actual_time) as avg_actual_time,
+           AVG(actual_time - estimated_time) as avg_time_overrun,
+           COUNT(*) as task_count
+         FROM completion_history
+         WHERE user_id = ?
+           AND DATE(completed_at) >= ?
+           AND DATE(completed_at) <= ?
+         GROUP BY difficulty_level
+         ORDER BY difficulty_level`,
+      )
+      .all(userId, startDate, endDate) as DifficultyAggRow[];
+
+    return rows.map((r) => ({
+      difficultyLevel: r.difficulty_level,
+      avgEstimatedTime: r.avg_estimated_time,
+      avgActualTime: r.avg_actual_time,
+      avgTimeOverrun: r.avg_time_overrun,
+      taskCount: r.task_count,
+    }));
+  }
+
+  /**
+   * Compute recent behavioral changes (Req 8.1–8.5).
+   *
+   * Compares the last 2 weeks vs the preceding 4 weeks per category.
+   */
+  private computeRecentChanges(
+    userId: string,
+    endDate: string,
+  ): NonNullable<ExtendedAnalyticsSummary["recentChanges"]> {
+    const end = new Date(endDate);
+
+    // Last 2 weeks
+    const recentStart = new Date(end);
+    recentStart.setDate(recentStart.getDate() - 14);
+    const recentStartStr = recentStart.toISOString().split("T")[0];
+
+    // Preceding 4 weeks (before the last 2 weeks)
+    const previousStart = new Date(recentStart);
+    previousStart.setDate(previousStart.getDate() - 28);
+    const previousStartStr = previousStart.toISOString().split("T")[0];
+
+    // Get avg actual time per category for each period
+    const recentRows = this.db
+      .prepare(
+        `SELECT normalized_category,
+                AVG(actual_time) as avg_actual_time,
+                COUNT(*) as cnt
+         FROM completion_history
+         WHERE user_id = ?
+           AND DATE(completed_at) > ?
+           AND DATE(completed_at) <= ?
+           AND normalized_category IS NOT NULL
+         GROUP BY normalized_category`,
+      )
+      .all(userId, recentStartStr, endDate) as {
+      normalized_category: string;
+      avg_actual_time: number;
+      cnt: number;
+    }[];
+
+    const previousRows = this.db
+      .prepare(
+        `SELECT normalized_category,
+                AVG(actual_time) as avg_actual_time,
+                COUNT(*) as cnt
+         FROM completion_history
+         WHERE user_id = ?
+           AND DATE(completed_at) > ?
+           AND DATE(completed_at) <= ?
+           AND normalized_category IS NOT NULL
+         GROUP BY normalized_category`,
+      )
+      .all(userId, previousStartStr, recentStartStr) as {
+      normalized_category: string;
+      avg_actual_time: number;
+      cnt: number;
+    }[];
+
+    const previousMap = new Map<string, number>();
+    for (const r of previousRows) {
+      previousMap.set(r.normalized_category, r.avg_actual_time);
+    }
+
+    const fasterCategories: CategoryChange[] = [];
+    const slowerCategories: CategoryChange[] = [];
+
+    for (const r of recentRows) {
+      const prevAvg = previousMap.get(r.normalized_category);
+      if (prevAvg === undefined || prevAvg === 0) continue;
+
+      const percentageChange = ((r.avg_actual_time - prevAvg) / prevAvg) * 100;
+
+      const change: CategoryChange = {
+        category: r.normalized_category,
+        percentageChange,
+        recentAvgTime: r.avg_actual_time,
+        previousAvgTime: prevAvg,
+      };
+
+      if (percentageChange < 0) {
+        fasterCategories.push(change);
+      } else if (percentageChange > 0) {
+        slowerCategories.push(change);
+      }
+    }
+
+    // Sort faster by most improvement (most negative), slower by most increase
+    fasterCategories.sort((a, b) => a.percentageChange - b.percentageChange);
+    slowerCategories.sort((a, b) => b.percentageChange - a.percentageChange);
+
+    // Largest overruns in last 2 weeks (Req 8.3)
+    const overrunRows = this.db
+      .prepare(
+        `SELECT task_description, estimated_time, actual_time,
+                (actual_time - estimated_time) as overrun
+         FROM completion_history
+         WHERE user_id = ?
+           AND DATE(completed_at) > ?
+           AND DATE(completed_at) <= ?
+           AND actual_time > estimated_time
+         ORDER BY overrun DESC
+         LIMIT 5`,
+      )
+      .all(userId, recentStartStr, endDate) as {
+      task_description: string;
+      estimated_time: number;
+      actual_time: number;
+      overrun: number;
+    }[];
+
+    const largestOverruns: OverrunTask[] = overrunRows.map((r) => ({
+      description: r.task_description,
+      estimatedTime: r.estimated_time,
+      actualTime: r.actual_time,
+      overrunMinutes: r.overrun,
+    }));
+
+    // Limited data categories: < 3 tasks in last 4 weeks (Req 8.4)
+    const allCategoriesLast4Weeks = this.db
+      .prepare(
+        `SELECT normalized_category, COUNT(*) as cnt
+         FROM completion_history
+         WHERE user_id = ?
+           AND DATE(completed_at) > ?
+           AND DATE(completed_at) <= ?
+           AND normalized_category IS NOT NULL
+         GROUP BY normalized_category
+         HAVING cnt < 3`,
+      )
+      .all(userId, previousStartStr, endDate) as {
+      normalized_category: string;
+      cnt: number;
+    }[];
+
+    const limitedDataCategories = allCategoriesLast4Weeks.map(
+      (r) => r.normalized_category,
+    );
+
+    return {
+      fasterCategories,
+      slowerCategories,
+      largestOverruns,
+      limitedDataCategories,
+    };
+  }
+
+  /**
+   * Compute data status: total completed tasks, weeks of data, days of data.
+   */
+  private computeDataStatus(
+    userId: string,
+  ): NonNullable<ExtendedAnalyticsSummary["dataStatus"]> {
+    const countRow = this.db
+      .prepare(
+        `SELECT COUNT(*) as cnt FROM completion_history WHERE user_id = ?`,
+      )
+      .get(userId) as CountRow | undefined;
+
+    const totalCompletedTasks = countRow?.cnt ?? 0;
+
+    const dateRange = this.db
+      .prepare(
+        `SELECT
+           MIN(DATE(completed_at)) as min_date,
+           MAX(DATE(completed_at)) as max_date
+         FROM completion_history
+         WHERE user_id = ?`,
+      )
+      .get(userId) as DateRangeRow | undefined;
+
+    let weeksOfData = 0;
+    let daysOfData = 0;
+
+    if (dateRange?.min_date && dateRange?.max_date) {
+      const minDate = new Date(dateRange.min_date);
+      const maxDate = new Date(dateRange.max_date);
+      const diffMs = maxDate.getTime() - minDate.getTime();
+      daysOfData = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
+      weeksOfData = Math.ceil(daysOfData / 7);
+    }
+
+    return {
+      totalCompletedTasks,
+      weeksOfData,
+      daysOfData,
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ISO Week helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Get the Monday and Sunday dates for the ISO week containing the given date.
+ */
+function getISOWeekRange(date: Date): {
+  weekStart: string;
+  weekEnd: string;
+} {
+  const d = new Date(date);
+  const day = d.getUTCDay();
+  // Adjust to Monday (day 0 = Sunday → offset 6, day 1 = Monday → offset 0, etc.)
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  const monday = new Date(d);
+  monday.setUTCDate(d.getUTCDate() + mondayOffset);
+
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
+
+  return {
+    weekStart: monday.toISOString().split("T")[0],
+    weekEnd: sunday.toISOString().split("T")[0],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// InsightGenerator — pure functions for behavioral insight detection
+// Requirements: 5.1, 5.2, 5.3, 5.4, 5.5
+// ---------------------------------------------------------------------------
+
+/** Minimum tasks per category for underestimation insights (Req 5.2) */
+const UNDERESTIMATION_MIN_TASKS = 5;
+
+/** Minimum overrun percentage threshold for underestimation insights (Req 5.2) */
+const UNDERESTIMATION_THRESHOLD = 0.15;
+
+/** Minimum weeks of data needed for trend-based insights */
+const MIN_WEEKS_FOR_TREND = 4;
+
+/** Maximum number of insights returned (Req 5.5) */
+const MAX_INSIGHTS = 5;
+
+/**
+ * Detect categories where the user consistently underestimates task time.
+ *
+ * A category qualifies when:
+ * - It has at least 5 completed tasks (sampleSize ≥ 5)
+ * - The average time overrun exceeds 15% of the average estimated time
+ *
+ * Produces a natural language insight string for each qualifying category.
+ *
+ * Req 5.2
+ */
+export function detectUnderestimation(
+  stats: CategoryPerformanceStat[],
+): BehavioralInsight[] {
+  const insights: BehavioralInsight[] = [];
+
+  for (const stat of stats) {
+    if (stat.sampleSize < UNDERESTIMATION_MIN_TASKS) {
+      continue;
+    }
+
+    if (stat.avgEstimatedTime <= 0) {
+      continue;
+    }
+
+    const overrunPercent = stat.avgTimeOverrun / stat.avgEstimatedTime;
+
+    if (overrunPercent > UNDERESTIMATION_THRESHOLD) {
+      const pct = Math.round(overrunPercent * 100);
+      insights.push({
+        text: `You typically underestimate ${stat.category} tasks by ${pct}%. Consider adding a buffer when planning these tasks.`,
+        magnitude: overrunPercent,
+        type: "underestimation",
+        category: stat.category,
+      });
+    }
+  }
+
+  return insights;
+}
+
+/**
+ * Detect categories where the user is getting faster over time.
+ *
+ * Looks at the last 4 weekly data points per category and computes a
+ * linear regression slope on the average actual time. A negative slope
+ * indicates the user is completing tasks faster.
+ *
+ * Req 5.3
+ */
+export function detectSpeedImprovements(
+  weeklyByCategory: Map<string, WeeklyTrendPoint[]>,
+): BehavioralInsight[] {
+  const insights: BehavioralInsight[] = [];
+
+  for (const [category, points] of weeklyByCategory) {
+    if (points.length < MIN_WEEKS_FOR_TREND) {
+      continue;
+    }
+
+    // Take the last 4 weeks
+    const recent = points.slice(-MIN_WEEKS_FOR_TREND);
+    const avgTimes = recent.map((p) => p.avgActualTime);
+    const slope = linearRegressionSlope(avgTimes);
+
+    // Negative slope means decreasing actual time (getting faster)
+    if (slope < 0) {
+      // Compute magnitude as the percentage decrease per week relative to the
+      // average actual time across the period
+      const avgTime = avgTimes.reduce((sum, t) => sum + t, 0) / avgTimes.length;
+      const magnitude = avgTime > 0 ? Math.abs(slope) / avgTime : 0;
+
+      if (magnitude > 0) {
+        const pctPerWeek = Math.round(magnitude * 100);
+        insights.push({
+          text: `You're getting faster at ${category} tasks, improving by about ${pctPerWeek}% per week.`,
+          magnitude,
+          type: "speed-improvement",
+          category,
+        });
+      }
+    }
+  }
+
+  return insights;
+}
+
+/**
+ * Detect categories where estimation accuracy is improving over time.
+ *
+ * Looks at the last 4 weekly data points per category and computes a
+ * linear regression slope on the estimation accuracy values. A positive
+ * slope indicates improving accuracy.
+ *
+ * Req 5.4
+ */
+export function detectAccuracyImprovements(
+  weeklyByCategory: Map<string, WeeklyTrendPoint[]>,
+): BehavioralInsight[] {
+  const insights: BehavioralInsight[] = [];
+
+  for (const [category, points] of weeklyByCategory) {
+    if (points.length < MIN_WEEKS_FOR_TREND) {
+      continue;
+    }
+
+    // Take the last 4 weeks
+    const recent = points.slice(-MIN_WEEKS_FOR_TREND);
+    const accuracies = recent.map((p) => p.estimationAccuracy);
+    const slope = linearRegressionSlope(accuracies);
+
+    // Positive slope means increasing accuracy (improving)
+    if (slope > 0) {
+      const magnitude = slope;
+      const pctImprovement = Math.round(slope * 100);
+
+      if (pctImprovement > 0) {
+        insights.push({
+          text: `Estimation accuracy for ${category} tasks is improving, gaining about ${pctImprovement} percentage points per week.`,
+          magnitude,
+          type: "accuracy-improvement",
+          category,
+        });
+      }
+    }
+  }
+
+  return insights;
+}
+
+/**
+ * Combine all insight detectors, rank by magnitude, and return the top 5.
+ *
+ * Req 5.1, 5.5
+ */
+export function generateInsights(
+  stats: CategoryPerformanceStat[],
+  weeklyByCategory: Map<string, WeeklyTrendPoint[]>,
+): BehavioralInsight[] {
+  const allInsights: BehavioralInsight[] = [
+    ...detectUnderestimation(stats),
+    ...detectSpeedImprovements(weeklyByCategory),
+    ...detectAccuracyImprovements(weeklyByCategory),
+  ];
+
+  // Sort by magnitude descending (most significant first)
+  allInsights.sort((a, b) => b.magnitude - a.magnitude);
+
+  // Return top 5 (Req 5.5)
+  return allInsights.slice(0, MAX_INSIGHTS);
 }
