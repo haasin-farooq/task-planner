@@ -10,6 +10,7 @@ const navItems = [
   {
     label: "Planner",
     path: "/",
+    section: "PLAN",
     icon: (
       <svg
         className="w-5 h-5"
@@ -29,6 +30,7 @@ const navItems = [
   {
     label: "Analytics",
     path: "/analytics",
+    section: "INSIGHT",
     icon: (
       <svg
         className="w-5 h-5"
@@ -104,7 +106,7 @@ export default function LeftSidebar({ isOpen, onClose }: LeftSidebarProps) {
       {/* Mobile overlay backdrop */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          className="fixed inset-0 bg-black/30 z-40 md:hidden"
           onClick={onClose}
           aria-hidden="true"
         />
@@ -136,7 +138,9 @@ export default function LeftSidebar({ isOpen, onClose }: LeftSidebarProps) {
               />
             </svg>
           </div>
-          <span className="text-white font-semibold text-lg">TaskPlanner</span>
+          <span className="text-[#1A1A1A] font-semibold text-lg">
+            TaskPlanner
+          </span>
         </div>
 
         {/* Navigation */}
@@ -144,6 +148,9 @@ export default function LeftSidebar({ isOpen, onClose }: LeftSidebarProps) {
           <ul className="space-y-1">
             {navItems.map((item) => (
               <li key={item.path}>
+                <span className="block px-3 pt-3 pb-1 text-[10px] font-semibold tracking-widest text-[#6B6B6B] uppercase">
+                  {item.section}
+                </span>
                 <NavLink
                   to={item.path}
                   end={item.path === "/"}
@@ -153,7 +160,7 @@ export default function LeftSidebar({ isOpen, onClose }: LeftSidebarProps) {
                     ${
                       isActive
                         ? "bg-accent text-white"
-                        : "text-gray-400 hover:text-white hover:bg-dark-card"
+                        : "text-[#6B6B6B] hover:text-[#1A1A1A] hover:bg-dark-border"
                     }`
                   }
                 >

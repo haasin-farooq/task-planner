@@ -12,7 +12,7 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
  * with a numeric label beside it.
  *
  * The filled arc length equals (effortPercentage / 100) * circumference.
- * Uses accent/violet for the filled arc and dark-border for the background track.
+ * Uses warm orange/coral for the filled arc and warm gray for the background track.
  *
  * Requirements: 5.5, 10.6
  */
@@ -55,10 +55,10 @@ export default function EffortIndicator({
           strokeDasharray={CIRCUMFERENCE}
           strokeDashoffset={dashOffset}
           strokeLinecap="round"
-          className="text-accent-light"
+          className="text-accent"
         />
       </svg>
-      <span className="text-sm text-gray-300">{Math.round(clamped)}%</span>
+      <span className="text-sm text-[#6B6B6B]">{Math.round(clamped)}%</span>
     </span>
   );
 }

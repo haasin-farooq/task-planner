@@ -75,7 +75,7 @@ export default function AnalyticsDashboard({
 
   return (
     <section aria-label="Analytics dashboard" className="space-y-6">
-      <h2 className="text-2xl font-bold text-white">Analytics Dashboard</h2>
+      <h2 className="text-2xl font-bold text-[#1A1A1A]">Analytics Dashboard</h2>
 
       {/* Date range selector — Req 7.1, 7.2, 7.3 */}
       <DateRangeSelector
@@ -86,13 +86,13 @@ export default function AnalyticsDashboard({
       />
 
       {loading && (
-        <p aria-live="polite" className="text-gray-400">
+        <p aria-live="polite" className="text-[#6B6B6B]">
           Loading analytics…
         </p>
       )}
 
       {error && (
-        <p role="alert" aria-live="assertive" className="text-red-400">
+        <p role="alert" aria-live="assertive" className="text-red-500">
           {error}
         </p>
       )}
@@ -105,7 +105,7 @@ export default function AnalyticsDashboard({
               role="status"
               aria-live="polite"
               data-testid="insufficient-data"
-              className="rounded-lg border border-yellow-600 bg-yellow-900/30 p-4 mb-4 text-yellow-200"
+              className="rounded-lg border border-amber-400 bg-amber-50 p-4 mb-4 text-amber-800"
             >
               <strong>Not enough data yet.</strong> Complete at least 5 tasks to
               see meaningful analytics.
@@ -145,11 +145,11 @@ function DateRangeSelector({
   onEndDateChange: (v: string) => void;
 }) {
   return (
-    <fieldset className="flex flex-wrap gap-4 items-center mb-6 border border-dark-border rounded-lg p-3 bg-dark-card">
-      <legend className="text-sm font-medium text-gray-300 px-1">
+    <fieldset className="flex flex-wrap gap-4 items-center mb-6 border border-dark-border rounded-lg p-3 bg-white">
+      <legend className="text-sm font-medium text-[#6B6B6B] px-1">
         Date Range
       </legend>
-      <label className="text-sm text-gray-300">
+      <label className="text-sm text-[#6B6B6B]">
         From{" "}
         <input
           type="date"
@@ -157,10 +157,10 @@ function DateRangeSelector({
           max={endDate}
           onChange={(e) => onStartDateChange(e.target.value)}
           aria-label="Start date"
-          className="ml-1 rounded-md border border-dark-border bg-dark-surface px-2 py-1 text-sm text-white focus:outline-none focus:ring-2 focus:ring-accent"
+          className="ml-1 rounded-md border border-dark-border bg-dark-bg px-2 py-1 text-sm text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-accent"
         />
       </label>
-      <label className="text-sm text-gray-300">
+      <label className="text-sm text-[#6B6B6B]">
         To{" "}
         <input
           type="date"
@@ -169,7 +169,7 @@ function DateRangeSelector({
           max={todayISO()}
           onChange={(e) => onEndDateChange(e.target.value)}
           aria-label="End date"
-          className="ml-1 rounded-md border border-dark-border bg-dark-surface px-2 py-1 text-sm text-white focus:outline-none focus:ring-2 focus:ring-accent"
+          className="ml-1 rounded-md border border-dark-border bg-dark-bg px-2 py-1 text-sm text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-accent"
         />
       </label>
     </fieldset>
@@ -189,8 +189,8 @@ function DailyCompletionChart({
   const maxCompleted = Math.max(...dailyStats.map((s) => s.tasksCompleted), 1);
 
   return (
-    <div className="mb-6 rounded-lg bg-dark-card border border-dark-border p-4">
-      <h3 className="text-lg font-semibold text-white mb-3">
+    <div className="mb-6 rounded-lg bg-white border border-dark-border p-4">
+      <h3 className="text-lg font-semibold text-[#1A1A1A] mb-3">
         Daily Completions
       </h3>
       <table
@@ -201,19 +201,19 @@ function DailyCompletionChart({
           <tr className="border-b border-dark-border">
             <th
               scope="col"
-              className="text-left py-1 px-2 text-sm font-medium text-gray-400"
+              className="text-left py-1 px-2 text-sm font-medium text-[#6B6B6B]"
             >
               Date
             </th>
             <th
               scope="col"
-              className="text-left py-1 px-2 text-sm font-medium text-gray-400"
+              className="text-left py-1 px-2 text-sm font-medium text-[#6B6B6B]"
             >
               Tasks
             </th>
             <th
               scope="col"
-              className="text-left py-1 px-2 text-sm font-medium text-gray-400 w-[60%]"
+              className="text-left py-1 px-2 text-sm font-medium text-[#6B6B6B] w-[60%]"
             >
               &nbsp;
             </th>
@@ -228,17 +228,17 @@ function DailyCompletionChart({
                 data-testid={`daily-stat-${stat.date}`}
                 className="border-b border-dark-border/50 last:border-b-0"
               >
-                <td className="py-1 px-2 whitespace-nowrap text-sm text-gray-300">
+                <td className="py-1 px-2 whitespace-nowrap text-sm text-[#6B6B6B]">
                   {formatDate(stat.date)}
                 </td>
-                <td className="py-1 px-2 text-right text-sm text-gray-200">
+                <td className="py-1 px-2 text-right text-sm text-[#1A1A1A]">
                   {stat.tasksCompleted}
                 </td>
                 <td className="py-1 px-2">
                   <div
                     role="img"
                     aria-label={`${stat.tasksCompleted} tasks completed on ${formatDate(stat.date)}`}
-                    className={`h-4 rounded bg-blue-500 ${stat.tasksCompleted > 0 ? "min-w-[4px]" : ""}`}
+                    className={`h-4 rounded bg-accent ${stat.tasksCompleted > 0 ? "min-w-[4px]" : ""}`}
                     style={{ width: `${pct}%` }}
                   />
                 </td>
@@ -280,8 +280,8 @@ function TimeComparison({ dailyStats }: { dailyStats: DailyCompletionStat[] }) {
         : "Right on target";
 
   return (
-    <div className="mb-6 rounded-lg bg-dark-card border border-dark-border p-4">
-      <h3 className="text-lg font-semibold text-white mb-3">
+    <div className="mb-6 rounded-lg bg-white border border-dark-border p-4">
+      <h3 className="text-lg font-semibold text-[#1A1A1A] mb-3">
         Average Time Comparison
       </h3>
       <div
@@ -290,26 +290,26 @@ function TimeComparison({ dailyStats }: { dailyStats: DailyCompletionStat[] }) {
         className="flex gap-8 flex-wrap"
       >
         <div data-testid="avg-estimated-time">
-          <div className="text-sm text-gray-400">Avg Estimated</div>
-          <div className="text-2xl font-semibold text-white">
+          <div className="text-sm text-[#6B6B6B]">Avg Estimated</div>
+          <div className="text-2xl font-semibold text-[#1A1A1A]">
             {avgEstimated.toFixed(1)} min
           </div>
         </div>
         <div data-testid="avg-actual-time">
-          <div className="text-sm text-gray-400">Avg Actual</div>
-          <div className="text-2xl font-semibold text-white">
+          <div className="text-sm text-[#6B6B6B]">Avg Actual</div>
+          <div className="text-2xl font-semibold text-[#1A1A1A]">
             {avgActual.toFixed(1)} min
           </div>
         </div>
         <div data-testid="time-diff">
-          <div className="text-sm text-gray-400">Difference</div>
+          <div className="text-sm text-[#6B6B6B]">Difference</div>
           <div
             className={`text-base font-medium ${
               diff > 0
-                ? "text-red-400"
+                ? "text-red-500"
                 : diff < 0
-                  ? "text-green-400"
-                  : "text-gray-400"
+                  ? "text-green-600"
+                  : "text-[#6B6B6B]"
             }`}
           >
             {diffLabel}
@@ -342,8 +342,8 @@ function DifficultyBreakdownDisplay({
   };
 
   return (
-    <div className="mb-6 rounded-lg bg-dark-card border border-dark-border p-4">
-      <h3 className="text-lg font-semibold text-white mb-3">
+    <div className="mb-6 rounded-lg bg-white border border-dark-border p-4">
+      <h3 className="text-lg font-semibold text-[#1A1A1A] mb-3">
         Difficulty Breakdown
       </h3>
       <table
@@ -354,25 +354,25 @@ function DifficultyBreakdownDisplay({
           <tr className="border-b border-dark-border">
             <th
               scope="col"
-              className="text-left py-1 px-2 text-sm font-medium text-gray-400"
+              className="text-left py-1 px-2 text-sm font-medium text-[#6B6B6B]"
             >
               Difficulty
             </th>
             <th
               scope="col"
-              className="text-right py-1 px-2 text-sm font-medium text-gray-400"
+              className="text-right py-1 px-2 text-sm font-medium text-[#6B6B6B]"
             >
               Count
             </th>
             <th
               scope="col"
-              className="text-right py-1 px-2 text-sm font-medium text-gray-400"
+              className="text-right py-1 px-2 text-sm font-medium text-[#6B6B6B]"
             >
               %
             </th>
             <th
               scope="col"
-              className="text-left py-1 px-2 text-sm font-medium text-gray-400 w-1/2"
+              className="text-left py-1 px-2 text-sm font-medium text-[#6B6B6B] w-1/2"
             >
               &nbsp;
             </th>
@@ -388,21 +388,21 @@ function DifficultyBreakdownDisplay({
                 data-testid={`difficulty-${b.difficultyLevel}`}
                 className="border-b border-dark-border/50 last:border-b-0"
               >
-                <td className="py-1 px-2 text-sm text-gray-300">
+                <td className="py-1 px-2 text-sm text-[#6B6B6B]">
                   {difficultyLabels[b.difficultyLevel] ??
                     `Level ${b.difficultyLevel}`}
                 </td>
-                <td className="py-1 px-2 text-right text-sm text-gray-200">
+                <td className="py-1 px-2 text-right text-sm text-[#1A1A1A]">
                   {b.count}
                 </td>
-                <td className="py-1 px-2 text-right text-sm text-gray-200">
+                <td className="py-1 px-2 text-right text-sm text-[#1A1A1A]">
                   {pct.toFixed(0)}%
                 </td>
                 <td className="py-1 px-2">
                   <div
                     role="img"
                     aria-label={`${b.count} tasks at ${difficultyLabels[b.difficultyLevel] ?? `level ${b.difficultyLevel}`}`}
-                    className={`h-4 rounded bg-accent-light ${b.count > 0 ? "min-w-[4px]" : ""}`}
+                    className={`h-4 rounded bg-accent ${b.count > 0 ? "min-w-[4px]" : ""}`}
                     style={{ width: `${barPct}%` }}
                   />
                 </td>
@@ -431,26 +431,26 @@ function PerformanceInsights({
   );
 
   return (
-    <div className="mb-6 rounded-lg bg-dark-card border border-dark-border p-4">
-      <h3 className="text-lg font-semibold text-white mb-3">
+    <div className="mb-6 rounded-lg bg-white border border-dark-border p-4">
+      <h3 className="text-lg font-semibold text-[#1A1A1A] mb-3">
         Performance Insights
       </h3>
 
       <div className="flex gap-8 flex-wrap">
         {/* Strengths — Req 7.5 */}
         <div className="flex-1 min-w-[200px]">
-          <h4 className="text-green-400 font-medium mb-2">💪 Strengths</h4>
+          <h4 className="text-green-600 font-medium mb-2">💪 Strengths</h4>
           {strengths.length === 0 ? (
-            <p className="text-gray-400 text-sm">
+            <p className="text-[#6B6B6B] text-sm">
               No strengths identified yet.
             </p>
           ) : (
             <ul role="list" aria-label="Strengths" className="space-y-2">
               {strengths.map((c) => (
                 <li key={c.category} data-testid={`strength-${c.category}`}>
-                  <strong className="text-gray-200">{c.category}</strong>
+                  <strong className="text-[#1A1A1A]">{c.category}</strong>
                   <br />
-                  <span className="text-sm text-gray-400">
+                  <span className="text-sm text-[#6B6B6B]">
                     Avg {c.avgActualTime.toFixed(1)} min vs{" "}
                     {c.avgEstimatedTime.toFixed(1)} min estimated
                   </span>
@@ -462,11 +462,11 @@ function PerformanceInsights({
 
         {/* Areas for improvement — Req 7.4 */}
         <div className="flex-1 min-w-[200px]">
-          <h4 className="text-red-400 font-medium mb-2">
+          <h4 className="text-red-500 font-medium mb-2">
             🎯 Areas for Improvement
           </h4>
           {improvements.length === 0 ? (
-            <p className="text-gray-400 text-sm">
+            <p className="text-[#6B6B6B] text-sm">
               No areas for improvement identified.
             </p>
           ) : (
@@ -477,9 +477,9 @@ function PerformanceInsights({
             >
               {improvements.map((c) => (
                 <li key={c.category} data-testid={`improvement-${c.category}`}>
-                  <strong className="text-gray-200">{c.category}</strong>
+                  <strong className="text-[#1A1A1A]">{c.category}</strong>
                   <br />
-                  <span className="text-sm text-gray-400">
+                  <span className="text-sm text-[#6B6B6B]">
                     Avg {c.avgActualTime.toFixed(1)} min vs{" "}
                     {c.avgEstimatedTime.toFixed(1)} min estimated
                   </span>

@@ -250,12 +250,12 @@ function PlannerView({ onTaskDataChange }: PlannerViewProps) {
     <div className="max-w-3xl mx-auto px-4">
       {/* Main content area header */}
       <div className="mb-8 pt-2">
-        <h1 className="text-3xl font-bold text-white">
-          Plan your day intelligently
+        <h1 className="text-3xl font-bold text-[#1A1A1A] font-serif">
+          What's on your <em className="text-accent">plate</em> today?
         </h1>
-        <p className="text-gray-400 mt-2">
-          Enter your rough tasks and let AI structure them into a prioritized
-          plan.
+        <p className="text-[#6B6B6B] mt-2">
+          Dump the mess. One line, many lines — doesn't matter. We untangle it
+          and sort the day for you.
         </p>
       </div>
 
@@ -273,14 +273,14 @@ function PlannerView({ onTaskDataChange }: PlannerViewProps) {
 
       {/* Phase: analyzing */}
       {phase === "analyzing" && (
-        <p aria-live="polite" className="text-center py-8 text-gray-300">
+        <p aria-live="polite" className="text-center py-8 text-[#6B6B6B]">
           Analyzing your tasks…
         </p>
       )}
 
       {/* Phase: restoring session */}
       {phase === "restoring" && (
-        <p aria-live="polite" className="text-center py-8 text-gray-300">
+        <p aria-live="polite" className="text-center py-8 text-[#6B6B6B]">
           Restoring your session…
         </p>
       )}
@@ -301,7 +301,7 @@ function PlannerView({ onTaskDataChange }: PlannerViewProps) {
           />
 
           {/* Active strategy label for screen readers */}
-          <p aria-live="polite" className="text-xs text-gray-400 mt-1 mb-3">
+          <p aria-live="polite" className="text-xs text-[#6B6B6B] mt-1 mb-3">
             Sorted by: {activeStrategy.replace(/-/g, " ")}
           </p>
 
@@ -317,7 +317,7 @@ function PlannerView({ onTaskDataChange }: PlannerViewProps) {
             <button
               onClick={handleStartOver}
               aria-label="Start over with new tasks"
-              className="px-6 py-2 rounded-md border border-dark-border bg-dark-card text-gray-300 hover:bg-dark-surface cursor-pointer transition-colors"
+              className="px-6 py-2 rounded-md border border-dark-border bg-white text-[#6B6B6B] hover:bg-dark-bg cursor-pointer transition-colors"
             >
               Start Over
             </button>

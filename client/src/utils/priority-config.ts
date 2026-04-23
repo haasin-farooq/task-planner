@@ -19,7 +19,7 @@ export function getPriorityConfig(priority: number): PriorityConfig {
   if (priority >= 4) {
     return {
       label: "High",
-      colorClass: "text-red-400",
+      colorClass: "text-red-500",
       icon: "↑",
     };
   }
@@ -27,14 +27,14 @@ export function getPriorityConfig(priority: number): PriorityConfig {
   if (priority === 3) {
     return {
       label: "Medium",
-      colorClass: "text-yellow-400",
+      colorClass: "text-amber-600",
       icon: "→",
     };
   }
 
   return {
     label: "Low",
-    colorClass: "text-green-400",
+    colorClass: "text-green-600",
     icon: "↓",
   };
 }
