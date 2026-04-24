@@ -2,6 +2,7 @@ import {
   useState,
   useCallback,
   useEffect,
+  useMemo,
   createContext,
   useContext,
 } from "react";
@@ -17,6 +18,7 @@ import UnblockedNotification from "./components/UnblockedNotification";
 import AnalyticsDashboard from "./components/AnalyticsDashboard";
 
 import { analyzeTasks, getSessionTasks } from "./api/client";
+import { useTaskTimer } from "./hooks/useTaskTimer";
 
 import type { AnalyzedTask, ParsedTask, PrioritizationStrategy } from "./types";
 
@@ -43,11 +45,13 @@ const SESSION_STORAGE_KEY = "taskplanner_session_id";
 export interface TaskDataContextValue {
   tasks: AnalyzedTask[];
   completedTaskIds: Set<string>;
+  inProgressTaskIds: Set<string>;
 }
 
 export const TaskDataContext = createContext<TaskDataContextValue>({
   tasks: [],
   completedTaskIds: new Set(),
+  inProgressTaskIds: new Set(),
 });
 
 export function useTaskData(): TaskDataContextValue {
@@ -62,6 +66,7 @@ interface PlannerViewProps {
   onTaskDataChange: (
     tasks: AnalyzedTask[],
     completedTaskIds: Set<string>,
+    inProgressTaskIds: Set<string>,
   ) => void;
 }
 
@@ -93,6 +98,28 @@ function PlannerView({ onTaskDataChange }: PlannerViewProps) {
   >([]);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
 
+  // --- Timer ---
+  const {
+    timerState,
+    elapsedMs,
+    startTimer,
+    pauseTimer,
+    resumeTimer,
+    stopTimer,
+    isTimerActiveForTask,
+  } = useTaskTimer();
+
+  const [trackedTimeMinutes, setTrackedTimeMinutes] = useState<
+    number | undefined
+  >(undefined);
+
+  // Compute inProgressTaskIds from timerState
+  const inProgressTaskIds = useMemo(() => {
+    const set = new Set<string>();
+    if (timerState) set.add(timerState.taskId);
+    return set;
+  }, [timerState]);
+
   // -------------------------------------------------------------------
   // Restore session from localStorage on mount
   // -------------------------------------------------------------------
@@ -120,7 +147,7 @@ function PlannerView({ onTaskDataChange }: PlannerViewProps) {
         setCompletedTaskIds(completed);
         setActualTimes(times);
         setPhase("tasks");
-        onTaskDataChange(result.tasks, completed);
+        onTaskDataChange(result.tasks, completed, new Set());
       })
       .catch(() => {
         if (cancelled) return;
@@ -157,7 +184,7 @@ function PlannerView({ onTaskDataChange }: PlannerViewProps) {
         localStorage.setItem(SESSION_STORAGE_KEY, result.sessionId);
 
         // Notify parent of new task data
-        onTaskDataChange(result.tasks, new Set());
+        onTaskDataChange(result.tasks, new Set(), new Set());
       } catch {
         setAnalyzeError("Failed to analyze tasks. Please try again.");
         setPhase("input");
@@ -174,9 +201,9 @@ function PlannerView({ onTaskDataChange }: PlannerViewProps) {
     (sorted: AnalyzedTask[], strategy: PrioritizationStrategy) => {
       setTasks(sorted);
       setActiveStrategy(strategy);
-      onTaskDataChange(sorted, completedTaskIds);
+      onTaskDataChange(sorted, completedTaskIds, inProgressTaskIds);
     },
-    [onTaskDataChange, completedTaskIds],
+    [onTaskDataChange, completedTaskIds, inProgressTaskIds],
   );
 
   // -------------------------------------------------------------------
@@ -186,9 +213,17 @@ function PlannerView({ onTaskDataChange }: PlannerViewProps) {
   const handleTaskComplete = useCallback(
     (taskId: string) => {
       const task = tasks.find((t) => t.id === taskId);
-      if (task) setCompletingTask(task);
+      if (!task) return;
+
+      // If timer was running for this task, stop it and capture the time
+      let tracked: number | undefined;
+      if (isTimerActiveForTask(taskId)) {
+        tracked = stopTimer();
+      }
+      setTrackedTimeMinutes(tracked);
+      setCompletingTask(task);
     },
-    [tasks],
+    [tasks, isTimerActiveForTask, stopTimer],
   );
 
   const handleCompletionConfirmed = useCallback(
@@ -207,13 +242,14 @@ function PlannerView({ onTaskDataChange }: PlannerViewProps) {
       }
 
       // Notify parent of updated completion state
-      onTaskDataChange(tasks, newCompleted);
+      onTaskDataChange(tasks, newCompleted, inProgressTaskIds);
     },
-    [onTaskDataChange, tasks, completedTaskIds],
+    [onTaskDataChange, tasks, completedTaskIds, inProgressTaskIds],
   );
 
   const handleCompletionCancelled = useCallback(() => {
     setCompletingTask(null);
+    setTrackedTimeMinutes(undefined);
   }, []);
 
   const handleDismissUnblocked = useCallback(() => {
@@ -232,7 +268,7 @@ function PlannerView({ onTaskDataChange }: PlannerViewProps) {
     setActualTimes(new Map());
     setAnalyzeError(null);
     localStorage.removeItem(SESSION_STORAGE_KEY);
-    onTaskDataChange([], new Set());
+    onTaskDataChange([], new Set(), new Set());
   }, [onTaskDataChange]);
 
   // -------------------------------------------------------------------
@@ -313,6 +349,11 @@ function PlannerView({ onTaskDataChange }: PlannerViewProps) {
             tasks={tasks}
             completedTaskIds={completedTaskIds}
             onTaskComplete={handleTaskComplete}
+            timerState={timerState}
+            elapsedMs={elapsedMs}
+            onStartTimer={startTimer}
+            onPauseTimer={pauseTimer}
+            onResumeTimer={resumeTimer}
           />
 
           {/* Start over button */}
@@ -334,6 +375,7 @@ function PlannerView({ onTaskDataChange }: PlannerViewProps) {
           task={completingTask}
           onCancel={handleCompletionCancelled}
           onComplete={handleCompletionConfirmed}
+          trackedTimeMinutes={trackedTimeMinutes}
         />
       )}
 
@@ -368,11 +410,16 @@ function App() {
   const [taskData, setTaskData] = useState<TaskDataContextValue>({
     tasks: [],
     completedTaskIds: new Set(),
+    inProgressTaskIds: new Set(),
   });
 
   const handleTaskDataChange = useCallback(
-    (tasks: AnalyzedTask[], completedTaskIds: Set<string>) => {
-      setTaskData({ tasks, completedTaskIds });
+    (
+      tasks: AnalyzedTask[],
+      completedTaskIds: Set<string>,
+      inProgressTaskIds: Set<string>,
+    ) => {
+      setTaskData({ tasks, completedTaskIds, inProgressTaskIds });
     },
     [],
   );

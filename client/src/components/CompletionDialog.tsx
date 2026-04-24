@@ -21,6 +21,8 @@ export interface CompletionDialogProps {
     actualTime: number,
     unblockedTasks: { id: string; description: string }[],
   ) => void;
+  /** Pre-filled tracked time from timer (minutes). If provided, used instead of estimated time. */
+  trackedTimeMinutes?: number;
 }
 
 /**
@@ -36,9 +38,10 @@ export default function CompletionDialog({
   task,
   onCancel,
   onComplete,
+  trackedTimeMinutes,
 }: CompletionDialogProps) {
   const [actualTime, setActualTime] = useState<string>(
-    String(task.metrics.estimatedTime),
+    String(trackedTimeMinutes ?? task.metrics.estimatedTime),
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,6 +100,12 @@ export default function CompletionDialog({
         <p className="text-sm text-text-secondary">
           Estimated time: {task.metrics.estimatedTime} min
         </p>
+
+        {trackedTimeMinutes !== undefined && (
+          <p className="text-sm text-accent">
+            ⏱ Timer tracked: {trackedTimeMinutes} min
+          </p>
+        )}
 
         <label
           htmlFor="actual-time-input"

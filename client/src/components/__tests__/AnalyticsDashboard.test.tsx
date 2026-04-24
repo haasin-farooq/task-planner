@@ -275,37 +275,37 @@ describe("AnalyticsDashboard", () => {
         ).toBeInTheDocument();
       });
 
-      // KPI Panel
+      // Overview tab (default) — KPI Panel
       expect(
         screen.getByRole("region", { name: "Key Performance Indicators" }),
       ).toBeInTheDocument();
 
-      // Weekly Trends
-      expect(
-        screen.getByRole("region", { name: "Weekly Behavior Trends" }),
-      ).toBeInTheDocument();
-
-      // Category Performance
+      // Time & Categories tab — Category Performance
+      fireEvent.click(screen.getByText("Time & Categories"));
       expect(
         screen.getByRole("region", { name: "Category Performance" }),
       ).toBeInTheDocument();
 
-      // Behavioral Insights
-      expect(
-        screen.getByRole("region", { name: "Behavioral Insights" }),
-      ).toBeInTheDocument();
-
-      // Estimation Accuracy
+      // Estimation tab — Estimation Accuracy, Difficulty Calibration
+      fireEvent.click(screen.getByText("Estimation"));
       expect(
         screen.getByRole("region", { name: "Estimation Accuracy" }),
       ).toBeInTheDocument();
-
-      // Difficulty Calibration
       expect(
         screen.getByRole("region", { name: "Difficulty Calibration" }),
       ).toBeInTheDocument();
 
-      // Recent Changes
+      // Trends tab — Weekly Behavior Trends
+      fireEvent.click(screen.getByText("Trends"));
+      expect(
+        screen.getByRole("region", { name: "Weekly Behavior Trends" }),
+      ).toBeInTheDocument();
+
+      // AI Learning tab — Behavioral Insights, Recent Behavioral Changes
+      fireEvent.click(screen.getByText("AI Learning"));
+      expect(
+        screen.getByRole("region", { name: "Behavioral Insights" }),
+      ).toBeInTheDocument();
       expect(
         screen.getByRole("region", { name: "Recent Behavioral Changes" }),
       ).toBeInTheDocument();
@@ -407,9 +407,16 @@ describe("AnalyticsDashboard", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByRole("region", { name: "Weekly Behavior Trends" }),
+          screen.getByRole("region", { name: "Analytics dashboard" }),
         ).toBeInTheDocument();
       });
+
+      // Weekly Trends is on the "Trends" tab
+      fireEvent.click(screen.getByText("Trends"));
+
+      expect(
+        screen.getByRole("region", { name: "Weekly Behavior Trends" }),
+      ).toBeInTheDocument();
 
       // WeeklyTrends shows LowDataState when weeksOfData < 2
       expect(screen.getByText(/Weekly Trends/i)).toBeInTheDocument();
@@ -424,9 +431,16 @@ describe("AnalyticsDashboard", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByRole("region", { name: "Behavioral Insights" }),
+          screen.getByRole("region", { name: "Analytics dashboard" }),
         ).toBeInTheDocument();
       });
+
+      // Insights is on the "AI Learning" tab
+      fireEvent.click(screen.getByText("AI Learning"));
+
+      expect(
+        screen.getByRole("region", { name: "Behavioral Insights" }),
+      ).toBeInTheDocument();
 
       // InsightsPanel shows LowDataState when totalCompleted < 10
       expect(
@@ -440,9 +454,16 @@ describe("AnalyticsDashboard", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByRole("region", { name: "Estimation Accuracy" }),
+          screen.getByRole("region", { name: "Analytics dashboard" }),
         ).toBeInTheDocument();
       });
+
+      // Estimation Accuracy is on the "Estimation" tab
+      fireEvent.click(screen.getByText("Estimation"));
+
+      expect(
+        screen.getByRole("region", { name: "Estimation Accuracy" }),
+      ).toBeInTheDocument();
     });
 
     it("shows Recent Changes low-data state when daysOfData < 14", async () => {
@@ -451,9 +472,16 @@ describe("AnalyticsDashboard", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByRole("region", { name: "Recent Behavioral Changes" }),
+          screen.getByRole("region", { name: "Analytics dashboard" }),
         ).toBeInTheDocument();
       });
+
+      // Recent Changes is on the "AI Learning" tab
+      fireEvent.click(screen.getByText("AI Learning"));
+
+      expect(
+        screen.getByRole("region", { name: "Recent Behavioral Changes" }),
+      ).toBeInTheDocument();
     });
   });
 

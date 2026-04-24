@@ -23,7 +23,7 @@ import { useTaskData } from "../App";
  */
 export default function AppShell(): JSX.Element {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { tasks, completedTaskIds } = useTaskData();
+  const { tasks, completedTaskIds, inProgressTaskIds } = useTaskData();
 
   const handleOpenSidebar = useCallback(() => {
     setSidebarOpen(true);
@@ -74,13 +74,21 @@ export default function AppShell(): JSX.Element {
 
         {/* Mobile-only: RightSidebar content stacked below main content */}
         <div className="md:hidden">
-          <RightSidebar tasks={tasks} completedTaskIds={completedTaskIds} />
+          <RightSidebar
+            tasks={tasks}
+            completedTaskIds={completedTaskIds}
+            inProgressTaskIds={inProgressTaskIds}
+          />
         </div>
       </main>
 
       {/* Desktop right sidebar — visible only at lg (≥1024px) as a fixed-width column */}
       <div className="hidden lg:block shrink-0">
-        <RightSidebar tasks={tasks} completedTaskIds={completedTaskIds} />
+        <RightSidebar
+          tasks={tasks}
+          completedTaskIds={completedTaskIds}
+          inProgressTaskIds={inProgressTaskIds}
+        />
       </div>
     </div>
   );

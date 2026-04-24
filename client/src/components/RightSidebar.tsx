@@ -6,6 +6,7 @@ import UpcomingCard from "./UpcomingCard";
 export interface RightSidebarProps {
   tasks: AnalyzedTask[];
   completedTaskIds: Set<string>;
+  inProgressTaskIds?: Set<string>;
 }
 
 /**
@@ -19,6 +20,7 @@ export interface RightSidebarProps {
 export default function RightSidebar({
   tasks,
   completedTaskIds,
+  inProgressTaskIds,
 }: RightSidebarProps) {
   const hasTasks = tasks.length > 0;
 
@@ -41,7 +43,11 @@ export default function RightSidebar({
       {/* Progress Ring */}
       <div className="rounded-lg bg-dark-card border border-dark-border p-4">
         {hasTasks ? (
-          <ProgressRing tasks={tasks} completedTaskIds={completedTaskIds} />
+          <ProgressRing
+            tasks={tasks}
+            completedTaskIds={completedTaskIds}
+            inProgressTaskIds={inProgressTaskIds}
+          />
         ) : (
           <div className="flex flex-col items-center py-4">
             <div className="h-24 w-24 rounded-full border-4 border-dark-border mb-3" />
