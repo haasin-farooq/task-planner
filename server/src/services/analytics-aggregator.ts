@@ -127,6 +127,34 @@ interface DateRangeRow {
 
 const INSUFFICIENT_DATA_THRESHOLD = 5;
 
+/**
+ * Recursive CTE that resolves each category to its final active target
+ * by following the merged_into_category_id chain. Used to roll up
+ * historical data from merged categories under their target category.
+ *
+ * Returns: resolved_id (the final active category id), original_id (the starting id)
+ *
+ * Requirements: 13.1, 13.2
+ */
+const RESOLVED_CATEGORY_CTE = `
+  resolved_cats AS (
+    -- Base case: categories that are not merged (active or archived)
+    SELECT id AS original_id, id AS resolved_id
+    FROM categories
+    WHERE status != 'merged' OR merged_into_category_id IS NULL
+
+    UNION ALL
+
+    -- Recursive case: follow merged_into_category_id pointer
+    SELECT rc.original_id, c.id AS resolved_id
+    FROM resolved_cats rc
+    JOIN categories c ON c.id = (
+      SELECT merged_into_category_id FROM categories WHERE id = rc.resolved_id AND status = 'merged' AND merged_into_category_id IS NOT NULL
+    )
+    WHERE rc.resolved_id != c.id
+  )
+`;
+
 export class AnalyticsAggregator {
   private db: Database.Database;
 
@@ -360,18 +388,21 @@ export class AnalyticsAggregator {
   ): PerformanceCategory[] {
     const rows = this.db
       .prepare(
-        `SELECT
-           c.name as category_name,
+        `WITH ${RESOLVED_CATEGORY_CTE}
+         SELECT
+           c_target.name as category_name,
            AVG(ch.actual_time) as avg_actual_time,
            AVG(ch.estimated_time) as avg_estimated_time
          FROM completion_history ch
-         JOIN categories c ON c.id = ch.category_id
+         JOIN resolved_cats rc ON rc.original_id = ch.category_id
+         JOIN categories c_target ON c_target.id = rc.resolved_id
          WHERE ch.user_id = ?
            AND DATE(ch.completed_at) >= ?
            AND DATE(ch.completed_at) <= ?
            AND ch.category_id IS NOT NULL
-         GROUP BY ch.category_id
-         ORDER BY c.name`,
+           AND c_target.status = 'active'
+         GROUP BY rc.resolved_id
+         ORDER BY c_target.name`,
       )
       .all(userId, startDate, endDate) as CategoryIdRow[];
 
@@ -422,11 +453,15 @@ export class AnalyticsAggregator {
   ): CompletionRow[] {
     return this.db
       .prepare(
-        `SELECT ch.estimated_time, ch.actual_time, ch.completed_at,
-                ch.normalized_category, c.name as category_name,
+        `WITH ${RESOLVED_CATEGORY_CTE}
+         SELECT ch.estimated_time, ch.actual_time, ch.completed_at,
+                ch.normalized_category,
+                COALESCE(c_target.name, c_raw.name) as category_name,
                 ch.task_description, ch.difficulty_level
          FROM completion_history ch
-         LEFT JOIN categories c ON c.id = ch.category_id
+         LEFT JOIN categories c_raw ON c_raw.id = ch.category_id
+         LEFT JOIN resolved_cats rc ON rc.original_id = ch.category_id
+         LEFT JOIN categories c_target ON c_target.id = rc.resolved_id
          WHERE ch.user_id = ?
            AND DATE(ch.completed_at) >= ?
            AND DATE(ch.completed_at) <= ?
@@ -590,15 +625,18 @@ export class AnalyticsAggregator {
   ): string | null {
     const row = this.db
       .prepare(
-        `SELECT c.name as category_name,
+        `WITH ${RESOLVED_CATEGORY_CTE}
+         SELECT c_target.name as category_name,
                 AVG(ch.actual_time - ch.estimated_time) as avg_overrun
          FROM completion_history ch
-         JOIN categories c ON c.id = ch.category_id
+         JOIN resolved_cats rc ON rc.original_id = ch.category_id
+         JOIN categories c_target ON c_target.id = rc.resolved_id
          WHERE ch.user_id = ?
            AND DATE(ch.completed_at) >= ?
            AND DATE(ch.completed_at) <= ?
            AND ch.category_id IS NOT NULL
-         GROUP BY ch.category_id
+           AND c_target.status = 'active'
+         GROUP BY rc.resolved_id
          HAVING avg_overrun > 0
          ORDER BY avg_overrun DESC
          LIMIT 1`,
@@ -710,20 +748,23 @@ export class AnalyticsAggregator {
   ): NonNullable<ExtendedAnalyticsSummary["categoryPerformance"]> {
     const rows = this.db
       .prepare(
-        `SELECT
-           c.name as category_name,
+        `WITH ${RESOLVED_CATEGORY_CTE}
+         SELECT
+           c_target.name as category_name,
            AVG(ch.estimated_time) as avg_estimated_time,
            AVG(ch.actual_time) as avg_actual_time,
            AVG(ch.actual_time - ch.estimated_time) as avg_time_overrun,
            COUNT(*) as sample_size
          FROM completion_history ch
-         JOIN categories c ON c.id = ch.category_id
+         JOIN resolved_cats rc ON rc.original_id = ch.category_id
+         JOIN categories c_target ON c_target.id = rc.resolved_id
          WHERE ch.user_id = ?
            AND DATE(ch.completed_at) >= ?
            AND DATE(ch.completed_at) <= ?
            AND ch.category_id IS NOT NULL
-         GROUP BY ch.category_id
-         ORDER BY c.name`,
+           AND c_target.status = 'active'
+         GROUP BY rc.resolved_id
+         ORDER BY c_target.name`,
       )
       .all(userId, startDate, endDate) as CategoryIdAggRow[];
 
@@ -931,16 +972,19 @@ export class AnalyticsAggregator {
     // Get avg actual time per category for each period
     const recentRows = this.db
       .prepare(
-        `SELECT c.name as category_name,
+        `WITH ${RESOLVED_CATEGORY_CTE}
+         SELECT c_target.name as category_name,
                 AVG(ch.actual_time) as avg_actual_time,
                 COUNT(*) as cnt
          FROM completion_history ch
-         JOIN categories c ON c.id = ch.category_id
+         JOIN resolved_cats rc ON rc.original_id = ch.category_id
+         JOIN categories c_target ON c_target.id = rc.resolved_id
          WHERE ch.user_id = ?
            AND DATE(ch.completed_at) > ?
            AND DATE(ch.completed_at) <= ?
            AND ch.category_id IS NOT NULL
-         GROUP BY ch.category_id`,
+           AND c_target.status = 'active'
+         GROUP BY rc.resolved_id`,
       )
       .all(userId, recentStartStr, endDate) as {
       category_name: string;
@@ -950,16 +994,19 @@ export class AnalyticsAggregator {
 
     const previousRows = this.db
       .prepare(
-        `SELECT c.name as category_name,
+        `WITH ${RESOLVED_CATEGORY_CTE}
+         SELECT c_target.name as category_name,
                 AVG(ch.actual_time) as avg_actual_time,
                 COUNT(*) as cnt
          FROM completion_history ch
-         JOIN categories c ON c.id = ch.category_id
+         JOIN resolved_cats rc ON rc.original_id = ch.category_id
+         JOIN categories c_target ON c_target.id = rc.resolved_id
          WHERE ch.user_id = ?
            AND DATE(ch.completed_at) > ?
            AND DATE(ch.completed_at) <= ?
            AND ch.category_id IS NOT NULL
-         GROUP BY ch.category_id`,
+           AND c_target.status = 'active'
+         GROUP BY rc.resolved_id`,
       )
       .all(userId, previousStartStr, recentStartStr) as {
       category_name: string;
@@ -1029,14 +1076,17 @@ export class AnalyticsAggregator {
     // Limited data categories: < 3 tasks in last 4 weeks (Req 8.4)
     const allCategoriesLast4Weeks = this.db
       .prepare(
-        `SELECT c.name as category_name, COUNT(*) as cnt
+        `WITH ${RESOLVED_CATEGORY_CTE}
+         SELECT c_target.name as category_name, COUNT(*) as cnt
          FROM completion_history ch
-         JOIN categories c ON c.id = ch.category_id
+         JOIN resolved_cats rc ON rc.original_id = ch.category_id
+         JOIN categories c_target ON c_target.id = rc.resolved_id
          WHERE ch.user_id = ?
            AND DATE(ch.completed_at) > ?
            AND DATE(ch.completed_at) <= ?
            AND ch.category_id IS NOT NULL
-         GROUP BY ch.category_id
+           AND c_target.status = 'active'
+         GROUP BY rc.resolved_id
          HAVING cnt < 3`,
       )
       .all(userId, previousStartStr, endDate) as {

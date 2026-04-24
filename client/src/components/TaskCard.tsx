@@ -1,5 +1,6 @@
 import type { AnalyzedTask } from "../types";
 import PriorityBadge from "./PriorityBadge";
+import CategoryBadge from "./CategoryBadge";
 import EffortIndicator from "./EffortIndicator";
 import DifficultyRating from "./DifficultyRating";
 import OverflowMenu from "./OverflowMenu";
@@ -87,6 +88,9 @@ export default function TaskCard({
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 pl-9 text-sm text-[#6B6B6B]">
         {/* Priority badge — Req 5.4 */}
         <PriorityBadge priority={metrics.priority} />
+
+        {/* Category badge — Req 11.1, 11.4, 11.5 */}
+        {task.category && <CategoryBadge categoryName={task.category} />}
 
         {/* Effort indicator — Req 5.5 */}
         <EffortIndicator effortPercentage={metrics.effortPercentage} />

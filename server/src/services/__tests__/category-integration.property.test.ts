@@ -639,10 +639,13 @@ describe("Property 10: Analytics groups by category_id and returns display name"
 
           ensureUser(db, "user-p10");
 
-          // Resolve category_id from the categories table
-          const catEntity = categoryRepo.findByName(expectedCategory);
-          expect(catEntity).not.toBeNull();
-          const categoryId = catEntity!.id;
+          // Create the category for this user (categories are per-user now)
+          const catEntity = categoryRepo.create(
+            expectedCategory,
+            "user-p10",
+            "system",
+          );
+          const categoryId = catEntity.id;
 
           // Insert completion records directly with the resolved category_id
           for (const rec of records) {
@@ -757,10 +760,17 @@ describe("Property 10: Analytics groups by category_id and returns display name"
 
           ensureUser(db, "user-p10b");
 
-          const catEntityA = categoryRepo.findByName(categoryA);
-          const catEntityB = categoryRepo.findByName(categoryB);
-          expect(catEntityA).not.toBeNull();
-          expect(catEntityB).not.toBeNull();
+          // Create categories for this user (categories are per-user now)
+          const catEntityA = categoryRepo.create(
+            categoryA,
+            "user-p10b",
+            "system",
+          );
+          const catEntityB = categoryRepo.create(
+            categoryB,
+            "user-p10b",
+            "system",
+          );
 
           // Insert records for category A
           for (const rec of recordsA) {
@@ -768,7 +778,7 @@ describe("Property 10: Analytics groups by category_id and returns display name"
             insertCompletionDirect(db, {
               userId: "user-p10b",
               description: rec.description,
-              categoryId: catEntityA!.id,
+              categoryId: catEntityA.id,
               normalizedCategory: categoryA,
               estimatedTime: rec.estimatedTime,
               actualTime: rec.actualTime,
@@ -783,7 +793,7 @@ describe("Property 10: Analytics groups by category_id and returns display name"
             insertCompletionDirect(db, {
               userId: "user-p10b",
               description: rec.description,
-              categoryId: catEntityB!.id,
+              categoryId: catEntityB.id,
               normalizedCategory: categoryB,
               estimatedTime: rec.estimatedTime,
               actualTime: rec.actualTime,

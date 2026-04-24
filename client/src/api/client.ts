@@ -9,6 +9,8 @@ import axios from "axios";
 import type {
   AnalyzedTask,
   AnalyticsSummary,
+  CategoryEntity,
+  ConsolidationSuggestion,
   ParsedTask,
   PrioritizationStrategy,
 } from "../types";
@@ -137,5 +139,69 @@ export async function resetLearningModel(
   const response = await axios.delete<{ userId: string; reset: boolean }>(
     `/api/learning/${encodeURIComponent(userId)}`,
   );
+  return response.data;
+}
+
+// ---------------------------------------------------------------------------
+// Category management
+// ---------------------------------------------------------------------------
+
+/** GET /api/categories?userId=... — Get active categories for a user. */
+export async function getCategories(userId: string): Promise<CategoryEntity[]> {
+  const response = await axios.get<CategoryEntity[]>("/api/categories", {
+    params: { userId },
+  });
+  return response.data;
+}
+
+/** POST /api/categories — Create a category manually. */
+export async function createCategory(
+  name: string,
+  userId: string,
+): Promise<CategoryEntity> {
+  const response = await axios.post<CategoryEntity>("/api/categories", {
+    name,
+    userId,
+  });
+  return response.data;
+}
+
+/** PATCH /api/categories/:id/archive — Archive a category. */
+export async function archiveCategory(
+  categoryId: number,
+): Promise<CategoryEntity> {
+  const response = await axios.patch<CategoryEntity>(
+    `/api/categories/${encodeURIComponent(categoryId)}/archive`,
+  );
+  return response.data;
+}
+
+/** POST /api/categories/consolidate — Trigger consolidation analysis. */
+export async function consolidateCategories(
+  userId: string,
+): Promise<{ suggestions: ConsolidationSuggestion[] }> {
+  const response = await axios.post<{
+    suggestions: ConsolidationSuggestion[];
+  }>("/api/categories/consolidate", { userId });
+  return response.data;
+}
+
+/** POST /api/categories/consolidate/apply — Apply approved consolidation suggestions. */
+export async function applyConsolidation(
+  userId: string,
+  suggestionIds: string[],
+  suggestions: ConsolidationSuggestion[],
+): Promise<{
+  applied: string[];
+  errors: { suggestionId: string; error: string }[];
+}> {
+  const response = await axios.post<{
+    applied: string[];
+    errors: { suggestionId: string; error: string }[];
+  }>("/api/categories/consolidate/apply", {
+    userId,
+    suggestionIds,
+    suggestions,
+  });
   return response.data;
 }

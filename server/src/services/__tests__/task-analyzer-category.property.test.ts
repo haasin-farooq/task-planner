@@ -80,6 +80,7 @@ function createCategoryAssignerMockClient() {
             content: JSON.stringify({
               category: "Development",
               isExisting: true,
+              confidence: 0.9,
             }),
           },
         },
@@ -144,6 +145,10 @@ describe("Property 8: Task analysis assigns a category to every task", () => {
         // Fresh DB for each run to avoid cross-contamination
         const testDb = new Database(":memory:");
         runMigrations(testDb);
+        // Insert test user for per-user category operations
+        testDb
+          .prepare("INSERT OR IGNORE INTO users (id) VALUES ('user-1')")
+          .run();
 
         try {
           const categoryRepo = new CategoryRepository(testDb);

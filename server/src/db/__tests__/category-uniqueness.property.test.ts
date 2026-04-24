@@ -133,12 +133,19 @@ describe("Property 1: Case-insensitive category uniqueness", () => {
       fc.property(categoryNameArb, (name) => {
         db.exec("DELETE FROM categories");
 
-        // Insert the original name
-        db.prepare("INSERT INTO categories (name) VALUES (?)").run(name);
+        // Ensure a user exists for the foreign key constraint
+        db.exec("INSERT OR IGNORE INTO users (id) VALUES ('test-user')");
+
+        // Insert the original name with required user_id
+        db.prepare(
+          "INSERT INTO categories (name, user_id) VALUES (?, 'test-user')",
+        ).run(name);
 
         // Attempt to insert the uppercase variant — should be ignored
         const result = db
-          .prepare("INSERT OR IGNORE INTO categories (name) VALUES (?)")
+          .prepare(
+            "INSERT OR IGNORE INTO categories (name, user_id) VALUES (?, 'test-user')",
+          )
           .run(name.toUpperCase());
 
         // changes === 0 means the insert was a no-op

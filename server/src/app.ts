@@ -29,6 +29,10 @@ import { AdaptiveLearningEngine } from "./services/adaptive-learning-engine.js";
 import { AnalyticsAggregator } from "./services/analytics-aggregator.js";
 import { PreferenceProfileStore } from "./services/preference-profile-store.js";
 import { CategoryRepository } from "./db/category-repository.js";
+import type {
+  CategoryConsolidator,
+  ConsolidationSuggestion,
+} from "./services/category-consolidator.js";
 import { getUnblockedTasks } from "./utils/dependency-graph.js";
 import type {
   AnalyzedTask,
@@ -84,6 +88,7 @@ export interface AppDependencies {
   analytics: AnalyticsAggregator;
   preferenceStore: PreferenceProfileStore;
   categoryRepo: CategoryRepository;
+  categoryConsolidator?: CategoryConsolidator;
 }
 
 /**
@@ -101,6 +106,7 @@ export function createApp(deps: AppDependencies): express.Express {
     analytics,
     preferenceStore,
     categoryRepo,
+    categoryConsolidator,
   } = deps;
 
   const app = express();
@@ -126,10 +132,17 @@ export function createApp(deps: AppDependencies): express.Express {
 
   app.get(
     "/api/categories",
-    (_req: Request, res: Response, next: NextFunction) => {
+    (req: Request, res: Response, next: NextFunction) => {
       try {
-        const categories = categoryRepo.getAll();
-        res.json(categories);
+        const userId = req.query.userId as string | undefined;
+        if (userId) {
+          const categories = categoryRepo.getActiveByUserId(userId);
+          res.json(categories);
+        } else {
+          // Legacy: return all categories when no userId is provided
+          const categories = categoryRepo.getAll();
+          res.json(categories);
+        }
       } catch (err) {
         next(err);
       }
@@ -176,84 +189,9 @@ export function createApp(deps: AppDependencies): express.Express {
           return;
         }
 
-        // Execute merge in a transaction for atomicity
-        const mergeTransaction = db.transaction(() => {
-          // 1. Update all completion_history rows from source to target
-          db.prepare(
-            "UPDATE completion_history SET category_id = ? WHERE category_id = ?",
-          ).run(targetCategoryId, sourceCategoryId);
-
-          // 2. Recompute behavioral_adjustments as weighted average
-          // For each user that has adjustments for the source category,
-          // merge into the target category's adjustments.
-          const sourceAdjustments = db
-            .prepare(
-              "SELECT user_id, time_multiplier, difficulty_adjustment, sample_size FROM behavioral_adjustments WHERE category_id = ?",
-            )
-            .all(sourceCategoryId) as Array<{
-            user_id: string;
-            time_multiplier: number;
-            difficulty_adjustment: number;
-            sample_size: number;
-          }>;
-
-          for (const srcAdj of sourceAdjustments) {
-            const targetAdj = db
-              .prepare(
-                "SELECT time_multiplier, difficulty_adjustment, sample_size FROM behavioral_adjustments WHERE user_id = ? AND category_id = ?",
-              )
-              .get(srcAdj.user_id, targetCategoryId) as
-              | {
-                  time_multiplier: number;
-                  difficulty_adjustment: number;
-                  sample_size: number;
-                }
-              | undefined;
-
-            if (targetAdj) {
-              // Compute weighted average
-              const totalSamples = srcAdj.sample_size + targetAdj.sample_size;
-              const mergedTimeMultiplier =
-                totalSamples > 0
-                  ? (srcAdj.time_multiplier * srcAdj.sample_size +
-                      targetAdj.time_multiplier * targetAdj.sample_size) /
-                    totalSamples
-                  : targetAdj.time_multiplier;
-              const mergedDifficultyAdj =
-                totalSamples > 0
-                  ? (srcAdj.difficulty_adjustment * srcAdj.sample_size +
-                      targetAdj.difficulty_adjustment * targetAdj.sample_size) /
-                    totalSamples
-                  : targetAdj.difficulty_adjustment;
-
-              db.prepare(
-                "UPDATE behavioral_adjustments SET time_multiplier = ?, difficulty_adjustment = ?, sample_size = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND category_id = ?",
-              ).run(
-                mergedTimeMultiplier,
-                mergedDifficultyAdj,
-                totalSamples,
-                srcAdj.user_id,
-                targetCategoryId,
-              );
-            } else {
-              // No target adjustment exists for this user — reassign the source row
-              db.prepare(
-                "UPDATE behavioral_adjustments SET category_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND category_id = ?",
-              ).run(targetCategoryId, srcAdj.user_id, sourceCategoryId);
-            }
-          }
-
-          // Delete any remaining source behavioral_adjustments rows
-          // (covers the case where we merged into existing target rows)
-          db.prepare(
-            "DELETE FROM behavioral_adjustments WHERE category_id = ?",
-          ).run(sourceCategoryId);
-
-          // 3. Delete the source category
-          categoryRepo.delete(sourceCategoryId);
-        });
-
-        mergeTransaction();
+        // Execute merge via repository (soft-delete: sets status='merged',
+        // populates merged_into_category_id, updates all references)
+        categoryRepo.merge(sourceCategoryId, targetCategoryId);
 
         res.json({
           message: `Category "${sourceCategory.name}" merged into "${targetCategory.name}"`,
@@ -294,6 +232,209 @@ export function createApp(deps: AppDependencies): express.Express {
             return;
           }
         }
+        next(err);
+      }
+    },
+  );
+
+  // -----------------------------------------------------------------------
+  // POST /api/categories — Create a category manually (Req 14.4, 14.6, 14.7)
+  // -----------------------------------------------------------------------
+
+  app.post(
+    "/api/categories",
+    (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const { name, userId } = req.body;
+
+        if (!name || typeof name !== "string" || name.trim() === "") {
+          res.status(400).json({ error: "Missing required field: name" });
+          return;
+        }
+
+        if (!userId || typeof userId !== "string" || userId.trim() === "") {
+          res.status(400).json({ error: "Missing required field: userId" });
+          return;
+        }
+
+        const trimmedName = name.trim();
+
+        // Check for duplicate name for this user
+        const existing = categoryRepo.findByNameAndUserId(trimmedName, userId);
+        if (existing) {
+          res
+            .status(409)
+            .json({ error: "A category with this name already exists" });
+          return;
+        }
+
+        // Ensure user exists
+        db.prepare("INSERT OR IGNORE INTO users (id) VALUES (?)").run(userId);
+
+        const category = categoryRepo.create(trimmedName, userId, "user");
+        res.status(201).json(category);
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  // -----------------------------------------------------------------------
+  // PATCH /api/categories/:categoryId/archive — Archive a category (Req 14.5, 14.7)
+  // -----------------------------------------------------------------------
+
+  app.patch(
+    "/api/categories/:categoryId/archive",
+    (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const categoryId = Number(req.params.categoryId);
+
+        const category = categoryRepo.findById(categoryId);
+        if (!category) {
+          res.status(404).json({ error: "Category not found" });
+          return;
+        }
+
+        categoryRepo.archive(categoryId);
+
+        const updated = categoryRepo.findById(categoryId)!;
+        res.json(updated);
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  // -----------------------------------------------------------------------
+  // POST /api/categories/consolidate — Trigger consolidation analysis (Req 8.1)
+  // -----------------------------------------------------------------------
+
+  app.post(
+    "/api/categories/consolidate",
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const { userId } = req.body;
+
+        if (!userId || typeof userId !== "string" || userId.trim() === "") {
+          res.status(400).json({ error: "Missing required field: userId" });
+          return;
+        }
+
+        if (!categoryConsolidator) {
+          res
+            .status(501)
+            .json({ error: "Category consolidation is not configured" });
+          return;
+        }
+
+        const categories = categoryRepo.getActiveByUserId(userId);
+        const suggestions = await categoryConsolidator.analyze(categories);
+
+        res.json({ suggestions });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  // -----------------------------------------------------------------------
+  // POST /api/categories/consolidate/apply — Apply consolidation suggestions (Req 8.2, 8.3, 8.4, 8.5)
+  // -----------------------------------------------------------------------
+
+  app.post(
+    "/api/categories/consolidate/apply",
+    (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const { userId, suggestionIds, suggestions } = req.body;
+
+        if (!userId || typeof userId !== "string" || userId.trim() === "") {
+          res.status(400).json({ error: "Missing required field: userId" });
+          return;
+        }
+
+        if (!Array.isArray(suggestionIds) || suggestionIds.length === 0) {
+          res
+            .status(400)
+            .json({ error: "Missing required field: suggestionIds" });
+          return;
+        }
+
+        if (!Array.isArray(suggestions) || suggestions.length === 0) {
+          res
+            .status(400)
+            .json({ error: "Missing required field: suggestions" });
+          return;
+        }
+
+        const applied: string[] = [];
+        const errors: { suggestionId: string; error: string }[] = [];
+
+        // Filter suggestions to only those in the approved list
+        const approvedSuggestions = (
+          suggestions as ConsolidationSuggestion[]
+        ).filter((s) => suggestionIds.includes(s.id));
+
+        for (const suggestion of approvedSuggestions) {
+          try {
+            if (suggestion.action === "merge") {
+              if (
+                suggestion.sourceCategoryId == null ||
+                suggestion.targetCategoryId == null
+              ) {
+                errors.push({
+                  suggestionId: suggestion.id,
+                  error: "Missing source or target category ID for merge",
+                });
+                continue;
+              }
+              categoryRepo.merge(
+                suggestion.sourceCategoryId,
+                suggestion.targetCategoryId,
+              );
+              applied.push(suggestion.id);
+            } else if (suggestion.action === "rename") {
+              if (suggestion.categoryId == null || !suggestion.proposedName) {
+                errors.push({
+                  suggestionId: suggestion.id,
+                  error: "Missing category ID or proposed name for rename",
+                });
+                continue;
+              }
+              categoryRepo.rename(
+                suggestion.categoryId,
+                suggestion.proposedName,
+              );
+              applied.push(suggestion.id);
+            } else if (suggestion.action === "split") {
+              if (
+                suggestion.categoryId == null ||
+                !suggestion.proposedNames ||
+                suggestion.proposedNames.length < 2
+              ) {
+                errors.push({
+                  suggestionId: suggestion.id,
+                  error: "Missing category ID or proposed names for split",
+                });
+                continue;
+              }
+              // Create new categories for the split; leave existing references on original
+              for (const newName of suggestion.proposedNames) {
+                categoryRepo.create(newName, userId, "system");
+              }
+              // Archive the original category
+              categoryRepo.archive(suggestion.categoryId);
+              applied.push(suggestion.id);
+            }
+          } catch (err) {
+            errors.push({
+              suggestionId: suggestion.id,
+              error: err instanceof Error ? err.message : "Unknown error",
+            });
+          }
+        }
+
+        res.json({ applied, errors });
+      } catch (err) {
         next(err);
       }
     },
