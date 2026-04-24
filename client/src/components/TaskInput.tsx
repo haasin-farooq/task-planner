@@ -152,12 +152,12 @@ export default function TaskInput({ onConfirm }: TaskInputProps) {
     return (
       <section
         aria-label="Review parsed tasks"
-        className="rounded-xl bg-white border border-dark-border p-6 shadow-sm"
+        className="rounded-xl bg-dark-card border border-dark-border p-6 shadow-sm"
       >
-        <h2 className="text-lg font-semibold text-[#1A1A1A] mb-1">
+        <h2 className="text-lg font-semibold text-text-primary mb-1">
           Review Your Tasks
         </h2>
-        <p className="text-sm text-[#6B6B6B] mb-4">
+        <p className="text-sm text-text-secondary mb-4">
           Edit or remove tasks before confirming.
         </p>
 
@@ -184,7 +184,7 @@ export default function TaskInput({ onConfirm }: TaskInputProps) {
                     }}
                     aria-label="Edit task description"
                     autoFocus
-                    className="flex-1 rounded-md bg-white border border-dark-border px-3 py-1.5 text-sm text-[#1A1A1A] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent"
+                    className="flex-1 rounded-md bg-dark-card border border-dark-border px-3 py-1.5 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent"
                   />
                   <button
                     onClick={() => saveEdit(task.id)}
@@ -196,7 +196,7 @@ export default function TaskInput({ onConfirm }: TaskInputProps) {
                   <button
                     onClick={cancelEdit}
                     aria-label="Cancel edit"
-                    className="rounded-md bg-dark-border px-3 py-1.5 text-xs font-medium text-[#6B6B6B] hover:bg-gray-300 transition-colors"
+                    className="rounded-md bg-dark-hover px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-dark-border transition-colors"
                   >
                     Cancel
                   </button>
@@ -207,7 +207,7 @@ export default function TaskInput({ onConfirm }: TaskInputProps) {
                   aria-label={`Task: ${task.description}`}
                   className="flex items-center gap-2 w-full"
                 >
-                  <span className="flex-1 text-sm text-[#1A1A1A]">
+                  <span className="flex-1 text-sm text-text-primary">
                     {task.description}
                   </span>
                   {task.isAmbiguous && (
@@ -222,14 +222,14 @@ export default function TaskInput({ onConfirm }: TaskInputProps) {
                   <button
                     onClick={() => startEditing(task)}
                     aria-label={`Edit task: ${task.description}`}
-                    className="rounded-md px-2 py-1 text-xs text-[#6B6B6B] hover:text-[#1A1A1A] hover:bg-dark-border transition-colors"
+                    className="rounded-md px-2 py-1 text-xs text-text-secondary hover:text-text-primary hover:bg-dark-hover transition-colors"
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => removeTask(task.id)}
                     aria-label={`Remove task: ${task.description}`}
-                    className="rounded-md px-2 py-1 text-xs text-[#6B6B6B] hover:text-red-500 hover:bg-dark-border transition-colors"
+                    className="rounded-md px-2 py-1 text-xs text-text-secondary hover:text-red-500 hover:bg-dark-hover transition-colors"
                   >
                     Remove
                   </button>
@@ -242,13 +242,13 @@ export default function TaskInput({ onConfirm }: TaskInputProps) {
         <div className="flex items-center gap-3 mt-4">
           <button
             onClick={handleBack}
-            className="rounded-lg bg-dark-bg border border-dark-border px-4 py-2 text-sm font-medium text-[#6B6B6B] hover:bg-dark-border transition-colors"
+            className="rounded-lg bg-dark-bg border border-dark-border px-4 py-2 text-sm font-medium text-text-secondary hover:bg-dark-hover transition-colors"
           >
             Back
           </button>
           <button
             onClick={handleConfirm}
-            className="rounded-lg bg-[#2A2A2A] px-4 py-2 text-sm font-medium text-white hover:bg-[#1A1A1A] transition-colors"
+            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-dark transition-colors"
           >
             Confirm Tasks
           </button>
@@ -261,16 +261,16 @@ export default function TaskInput({ onConfirm }: TaskInputProps) {
   return (
     <section
       aria-label="Task input"
-      className="rounded-xl bg-white border border-dark-border p-6 shadow-sm"
+      className="rounded-xl bg-dark-card border border-dark-border p-6 shadow-sm"
     >
       {/* Card header */}
       <div className="mb-4">
-        <h2 className="text-lg font-semibold text-[#1A1A1A]">
+        <h2 className="text-lg font-semibold text-text-primary">
           Enter your tasks
         </h2>
       </div>
 
-      <p className="text-sm text-[#6B6B6B] mb-3">
+      <p className="text-sm text-text-secondary mb-3">
         Paste or type your tasks for the day. They can be rough and
         unstructured.
       </p>
@@ -287,13 +287,13 @@ export default function TaskInput({ onConfirm }: TaskInputProps) {
         rows={6}
         aria-label="Raw task input"
         disabled={loading}
-        className="w-full rounded-lg bg-dark-bg border border-dark-border px-4 py-3 text-sm text-[#1A1A1A] placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50"
+        className="w-full rounded-lg bg-dark-bg border border-dark-border px-4 py-3 text-sm text-text-primary placeholder-text-muted resize-none focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50"
       />
 
       {/* Helper text */}
       <div className="flex items-center justify-between mt-2 mb-4">
-        <span className="text-xs text-[#6B6B6B]">One task per line</span>
-        <span className="text-xs text-[#6B6B6B]">
+        <span className="text-xs text-text-secondary">One task per line</span>
+        <span className="text-xs text-text-secondary">
           Press Cmd + Enter to analyze
         </span>
       </div>
@@ -311,7 +311,7 @@ export default function TaskInput({ onConfirm }: TaskInputProps) {
       <button
         onClick={handleSubmit}
         disabled={loading}
-        className="rounded-lg bg-[#2A2A2A] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#1A1A1A] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="rounded-lg bg-accent px-5 py-2.5 text-sm font-medium text-white hover:bg-accent-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
         {loading ? "Parsing…" : "Parse Tasks"}
       </button>

@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { Outlet } from "react-router-dom";
 import LeftSidebar from "./LeftSidebar";
 import RightSidebar from "./RightSidebar";
+import ThemeToggle from "./ThemeToggle";
 import { useTaskData } from "../App";
 
 /**
@@ -40,12 +41,12 @@ export default function AppShell(): JSX.Element {
       {/* Scrollable content area: on mobile scrolls main + stacked right sidebar together */}
       <main className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden pt-6 pb-6">
         {/* Mobile hamburger button — visible only below md breakpoint */}
-        <div className="md:hidden flex items-center px-4 py-3 bg-dark-surface border-b border-dark-border">
+        <div className="md:hidden flex items-center justify-between px-4 py-3 bg-dark-surface border-b border-dark-border">
           <button
             type="button"
             aria-label="Open navigation menu"
             onClick={handleOpenSidebar}
-            className="p-2 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-dark-border transition-colors"
+            className="p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-dark-hover transition-colors"
           >
             <svg
               className="w-6 h-6"
@@ -61,6 +62,12 @@ export default function AppShell(): JSX.Element {
               />
             </svg>
           </button>
+          <ThemeToggle />
+        </div>
+
+        {/* Desktop theme toggle — top right of content area, hidden on mobile */}
+        <div className="hidden md:flex justify-end px-6 -mb-4">
+          <ThemeToggle />
         </div>
 
         <Outlet />

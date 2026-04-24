@@ -25,8 +25,7 @@ export default function LowDataState({
 
   return (
     <div
-      className="rounded-lg border border-[#E8E4DF] p-8"
-      style={{ backgroundColor: "#FFF8F0" }}
+      className="rounded-lg border border-dark-border p-8 bg-dark-surface"
       role="status"
       aria-label={`${sectionName} requires more data`}
     >
@@ -34,7 +33,7 @@ export default function LowDataState({
         /* Zero-data welcome state */
         <div className="text-center">
           {/* Decorative icon */}
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#E8734A]/10">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-accent/10">
             <svg
               width="24"
               height="24"
@@ -52,10 +51,10 @@ export default function LowDataState({
             </svg>
           </div>
 
-          <h3 className="font-serif text-lg font-semibold text-gray-800">
+          <h3 className="font-serif text-lg font-semibold text-text-primary">
             Welcome to {sectionName}
           </h3>
-          <p className="mt-2 text-sm text-gray-600">
+          <p className="mt-2 text-sm text-text-secondary">
             Start completing tasks to unlock insights here. You need at least{" "}
             {required} {unit} of data to see {sectionName.toLowerCase()}.
           </p>
@@ -63,12 +62,12 @@ export default function LowDataState({
       ) : (
         /* Partial progress state */
         <div>
-          <h3 className="font-serif text-base font-semibold text-gray-800">
+          <h3 className="font-serif text-base font-semibold text-text-primary">
             Almost there
           </h3>
 
-          <p className="mt-1 text-sm text-gray-600">
-            <span className="font-medium text-gray-800">
+          <p className="mt-1 text-sm text-text-secondary">
+            <span className="font-medium text-text-primary">
               {current} of {required} {unit}
             </span>{" "}
             — {remaining} more to unlock {sectionName.toLowerCase()}
@@ -77,7 +76,7 @@ export default function LowDataState({
           {/* Progress bar */}
           <div className="mt-3">
             <div
-              className="h-2 w-full overflow-hidden rounded-full bg-[#E8E4DF]"
+              className="h-2 w-full overflow-hidden rounded-full bg-dark-border"
               role="progressbar"
               aria-valuenow={current}
               aria-valuemin={0}
@@ -85,11 +84,8 @@ export default function LowDataState({
               aria-label={`${current} of ${required} ${unit} completed`}
             >
               <div
-                className="h-full rounded-full transition-all duration-300"
-                style={{
-                  width: `${progressPercent}%`,
-                  backgroundColor: "#E8734A",
-                }}
+                className="h-full rounded-full transition-all duration-300 bg-accent"
+                style={{ width: `${progressPercent}%` }}
               />
             </div>
           </div>

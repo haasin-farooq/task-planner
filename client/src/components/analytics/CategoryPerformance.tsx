@@ -90,9 +90,6 @@ function SortIndicator({
  * Category Performance section — displays a sortable table of per-category
  * performance stats and lists of consistently faster/slower categories.
  *
- * Shows an insufficient-data indicator for categories with fewer than 3 tasks.
- * Default sort is by average time overrun descending.
- *
  * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 11.3
  */
 export default function CategoryPerformance({
@@ -142,23 +139,20 @@ export default function CategoryPerformance({
 
   return (
     <section aria-label="Category Performance">
-      <h2 className="mb-4 font-serif text-xl font-semibold text-[#1A1A1A]">
+      <h2 className="mb-4 font-serif text-xl font-semibold text-text-primary">
         Category Performance
       </h2>
 
       {/* Performance table */}
-      <div
-        className="overflow-x-auto rounded-lg border border-[#E8E4DF]"
-        style={{ backgroundColor: "#FFF8F0" }}
-      >
+      <div className="overflow-x-auto rounded-lg border border-dark-border bg-dark-surface">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-[#E8E4DF] bg-white/60">
+            <tr className="border-b border-dark-border bg-dark-card/60">
               {columns.map(({ field, label }) => (
                 <th
                   key={field}
                   scope="col"
-                  className="cursor-pointer select-none px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-[#6B6B6B] hover:text-[#E8734A] transition-colors"
+                  className="cursor-pointer select-none px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-text-secondary hover:text-accent transition-colors"
                   onClick={() => handleSort(field)}
                   aria-sort={
                     sortField === field
@@ -185,11 +179,11 @@ export default function CategoryPerformance({
               return (
                 <tr
                   key={stat.category}
-                  className={`border-b border-[#E8E4DF] last:border-b-0 transition-colors hover:bg-white/40 ${
+                  className={`border-b border-dark-border last:border-b-0 transition-colors hover:bg-dark-hover/40 ${
                     isInsufficient ? "opacity-70" : ""
                   }`}
                 >
-                  <td className="px-4 py-3 font-medium text-[#1A1A1A]">
+                  <td className="px-4 py-3 font-medium text-text-primary">
                     {stat.category}
                     {isInsufficient && (
                       <span
@@ -202,24 +196,24 @@ export default function CategoryPerformance({
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-[#4A4A4A]">
+                  <td className="px-4 py-3 text-text-secondary">
                     {formatMinutes(stat.avgEstimatedTime)}
                   </td>
-                  <td className="px-4 py-3 text-[#4A4A4A]">
+                  <td className="px-4 py-3 text-text-secondary">
                     {formatMinutes(stat.avgActualTime)}
                   </td>
                   <td
                     className={`px-4 py-3 font-medium ${
                       stat.avgTimeOverrun > 0
-                        ? "text-red-600"
+                        ? "text-red-600 dark:text-red-400"
                         : stat.avgTimeOverrun < 0
-                          ? "text-green-600"
-                          : "text-[#4A4A4A]"
+                          ? "text-green-600 dark:text-green-400"
+                          : "text-text-secondary"
                     }`}
                   >
                     {formatOverrun(stat.avgTimeOverrun)}
                   </td>
-                  <td className="px-4 py-3 text-[#4A4A4A]">
+                  <td className="px-4 py-3 text-text-secondary">
                     {stat.sampleSize}
                   </td>
                 </tr>
@@ -229,7 +223,7 @@ export default function CategoryPerformance({
               <tr>
                 <td
                   colSpan={5}
-                  className="px-4 py-6 text-center text-sm text-[#6B6B6B]"
+                  className="px-4 py-6 text-center text-sm text-text-secondary"
                 >
                   No category data available yet.
                 </td>
@@ -243,18 +237,15 @@ export default function CategoryPerformance({
       {(consistentlyFaster.length > 0 || consistentlySlower.length > 0) && (
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
           {consistentlyFaster.length > 0 && (
-            <div
-              className="rounded-lg border border-[#E8E4DF] p-4"
-              style={{ backgroundColor: "#F0FDF4" }}
-            >
-              <h3 className="mb-2 font-serif text-base font-semibold text-green-800">
+            <div className="rounded-lg border border-green-200 dark:border-green-800 p-4 bg-green-50 dark:bg-green-900/20">
+              <h3 className="mb-2 font-serif text-base font-semibold text-green-800 dark:text-green-400">
                 Consistently Faster
               </h3>
               <ul className="space-y-1">
                 {consistentlyFaster.map((category) => (
                   <li
                     key={category}
-                    className="flex items-center gap-2 text-sm text-green-700"
+                    className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400"
                   >
                     <svg
                       width="14"
@@ -279,18 +270,15 @@ export default function CategoryPerformance({
           )}
 
           {consistentlySlower.length > 0 && (
-            <div
-              className="rounded-lg border border-[#E8E4DF] p-4"
-              style={{ backgroundColor: "#FEF2F2" }}
-            >
-              <h3 className="mb-2 font-serif text-base font-semibold text-red-800">
+            <div className="rounded-lg border border-red-200 dark:border-red-800 p-4 bg-red-50 dark:bg-red-900/20">
+              <h3 className="mb-2 font-serif text-base font-semibold text-red-800 dark:text-red-400">
                 Consistently Slower
               </h3>
               <ul className="space-y-1">
                 {consistentlySlower.map((category) => (
                   <li
                     key={category}
-                    className="flex items-center gap-2 text-sm text-red-700"
+                    className="flex items-center gap-2 text-sm text-red-700 dark:text-red-400"
                   >
                     <svg
                       width="14"

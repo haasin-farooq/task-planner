@@ -13,17 +13,16 @@ const TREND_BADGE_STYLES: Record<
   EstimationAccuracyProps["trendLabel"],
   string
 > = {
-  Improving: "bg-green-100 text-green-800",
-  Stable: "bg-gray-100 text-gray-700",
-  Declining: "bg-red-100 text-red-800",
+  Improving:
+    "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+  Stable: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
+  Declining: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
 };
 
 /**
  * Estimation Accuracy section. Renders two trend charts — weekly accuracy %
  * and weekly error % — plus a trend label badge indicating whether accuracy
  * is improving, stable, or declining.
- *
- * Displays a low-data state when fewer than 2 weeks of data are available.
  *
  * Requirements: 6.1, 6.2, 6.3, 6.4, 11.1
  */
@@ -35,7 +34,7 @@ export default function EstimationAccuracy({
   if (weeksOfData < 2) {
     return (
       <section aria-label="Estimation Accuracy">
-        <h2 className="mb-4 font-serif text-xl font-semibold text-gray-800">
+        <h2 className="mb-4 font-serif text-xl font-semibold text-text-primary">
           Estimation Accuracy
         </h2>
         <LowDataState
@@ -61,7 +60,7 @@ export default function EstimationAccuracy({
   return (
     <section aria-label="Estimation Accuracy">
       <div className="mb-4 flex items-center gap-3">
-        <h2 className="font-serif text-xl font-semibold text-gray-800">
+        <h2 className="font-serif text-xl font-semibold text-text-primary">
           Estimation Accuracy
         </h2>
         <span
@@ -73,7 +72,7 @@ export default function EstimationAccuracy({
 
       <div className="space-y-6">
         <div>
-          <h3 className="mb-2 text-sm font-medium text-gray-600">
+          <h3 className="mb-2 text-sm font-medium text-text-secondary">
             Weekly Accuracy %
           </h3>
           <TrendChart
@@ -85,7 +84,7 @@ export default function EstimationAccuracy({
         </div>
 
         <div>
-          <h3 className="mb-2 text-sm font-medium text-gray-600">
+          <h3 className="mb-2 text-sm font-medium text-text-secondary">
             Weekly Error %
           </h3>
           <TrendChart

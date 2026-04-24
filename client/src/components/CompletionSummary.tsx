@@ -30,13 +30,17 @@ export default function CompletionSummary({
   const diff = totalActual - totalEstimated;
 
   const diffColorClass =
-    diff > 0 ? "text-red-500" : diff < 0 ? "text-green-600" : "text-[#6B6B6B]";
+    diff > 0
+      ? "text-red-500"
+      : diff < 0
+        ? "text-green-600"
+        : "text-text-secondary";
 
   return (
     <section
       aria-label="Completion summary"
       data-testid="completion-summary"
-      className="p-6 bg-white border border-green-500 rounded-xl text-center mb-6 shadow-sm"
+      className="p-6 bg-dark-card border border-green-500 rounded-xl text-center mb-6 shadow-sm"
     >
       <h2 className="text-green-600 mt-0 text-xl font-semibold">
         🎉 All Tasks Complete!
@@ -44,15 +48,15 @@ export default function CompletionSummary({
 
       <div className="flex justify-center gap-8 flex-wrap mb-4">
         <div data-testid="total-estimated">
-          <div className="text-sm text-[#6B6B6B]">Total Estimated</div>
-          <div className="text-2xl font-semibold text-[#1A1A1A]">
+          <div className="text-sm text-text-secondary">Total Estimated</div>
+          <div className="text-2xl font-semibold text-text-primary">
             {totalEstimated} min
           </div>
         </div>
 
         <div data-testid="total-actual">
-          <div className="text-sm text-[#6B6B6B]">Total Actual</div>
-          <div className="text-2xl font-semibold text-[#1A1A1A]">
+          <div className="text-sm text-text-secondary">Total Actual</div>
+          <div className="text-2xl font-semibold text-text-primary">
             {totalActual} min
           </div>
         </div>

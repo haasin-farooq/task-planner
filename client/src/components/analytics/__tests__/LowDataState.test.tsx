@@ -126,7 +126,7 @@ describe("LowDataState", () => {
 
   // --- Styling ---
 
-  it("applies cream background color", () => {
+  it("applies theme surface background class", () => {
     render(
       <LowDataState
         current={1}
@@ -137,6 +137,6 @@ describe("LowDataState", () => {
     );
 
     const container = screen.getByRole("status");
-    expect(container).toHaveStyle({ backgroundColor: "#FFF8F0" });
+    expect(container.className).toContain("bg-dark-surface");
   });
 });

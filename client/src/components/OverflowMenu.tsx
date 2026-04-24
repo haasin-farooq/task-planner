@@ -76,7 +76,7 @@ export default function OverflowMenu({
         aria-haspopup="menu"
         aria-expanded={isOpen}
         onClick={handleToggle}
-        className="flex h-8 w-8 items-center justify-center rounded text-[#6B6B6B] hover:bg-dark-border hover:text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-accent"
+        className="flex h-8 w-8 items-center justify-center rounded text-text-secondary hover:bg-dark-hover hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
       >
         ⋯
       </button>
@@ -84,13 +84,13 @@ export default function OverflowMenu({
       {isOpen && (
         <div
           role="menu"
-          className="absolute right-0 z-10 mt-1 w-40 rounded-md border border-dark-border bg-white py-1 shadow-lg"
+          className="absolute right-0 z-10 mt-1 w-40 rounded-md border border-dark-border bg-dark-card py-1 shadow-lg"
         >
           <button
             role="menuitem"
             type="button"
             onClick={handleMarkComplete}
-            className="block w-full px-4 py-2 text-left text-sm text-[#1A1A1A] hover:bg-dark-bg hover:text-[#1A1A1A] focus:bg-dark-bg focus:text-[#1A1A1A] focus:outline-none"
+            className="block w-full px-4 py-2 text-left text-sm text-text-primary hover:bg-dark-hover focus:bg-dark-hover focus:outline-none"
           >
             Mark Complete
           </button>

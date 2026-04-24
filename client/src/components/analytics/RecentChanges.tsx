@@ -28,9 +28,6 @@ function formatMinutes(value: number): string {
   return mins > 0 ? `${sign}${hours}h ${mins}m` : `${sign}${hours}h`;
 }
 
-/**
- * Down-arrow icon indicating a category got faster (time decreased).
- */
 function FasterIcon() {
   return (
     <svg
@@ -52,9 +49,6 @@ function FasterIcon() {
   );
 }
 
-/**
- * Up-arrow icon indicating a category got slower (time increased).
- */
 function SlowerIcon() {
   return (
     <svg
@@ -76,9 +70,6 @@ function SlowerIcon() {
   );
 }
 
-/**
- * Warning icon for limited-data categories.
- */
 function LimitedDataIcon() {
   return (
     <svg
@@ -111,9 +102,6 @@ function LimitedDataIcon() {
  * Recent Changes section — displays faster/slower category lists,
  * top overrun tasks, and limited-data categories.
  *
- * Shows a low-data state when daysOfData < 14.
- * Uses warm editorial design with cream backgrounds and orange accents.
- *
  * Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 9.1
  */
 export default function RecentChanges({
@@ -126,7 +114,7 @@ export default function RecentChanges({
   if (daysOfData < 14) {
     return (
       <section aria-label="Recent Behavioral Changes">
-        <h2 className="mb-4 font-serif text-xl font-semibold text-[#1A1A1A]">
+        <h2 className="mb-4 font-serif text-xl font-semibold text-text-primary">
           Recent Changes
         </h2>
         <LowDataState
@@ -147,16 +135,13 @@ export default function RecentChanges({
 
   return (
     <section aria-label="Recent Behavioral Changes">
-      <h2 className="mb-4 font-serif text-xl font-semibold text-[#1A1A1A]">
+      <h2 className="mb-4 font-serif text-xl font-semibold text-text-primary">
         Recent Changes
       </h2>
 
       {!hasContent ? (
-        <div
-          className="rounded-lg border border-[#E8E4DF] p-6 text-center"
-          style={{ backgroundColor: "#FFF8F0" }}
-        >
-          <p className="text-sm text-[#6B6B6B]">
+        <div className="rounded-lg border border-dark-border p-6 text-center bg-dark-surface">
+          <p className="text-sm text-text-secondary">
             No significant behavioral changes detected in the last 2 weeks.
           </p>
         </div>
@@ -166,11 +151,8 @@ export default function RecentChanges({
           {hasChanges && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {fasterCategories.length > 0 && (
-                <div
-                  className="rounded-lg border border-[#E8E4DF] p-4"
-                  style={{ backgroundColor: "#F0FDF4" }}
-                >
-                  <h3 className="mb-2 font-serif text-base font-semibold text-green-800">
+                <div className="rounded-lg border border-green-200 dark:border-green-800 p-4 bg-green-50 dark:bg-green-900/20">
+                  <h3 className="mb-2 font-serif text-base font-semibold text-green-800 dark:text-green-400">
                     Getting Faster
                   </h3>
                   <ul className="space-y-2">
@@ -179,11 +161,11 @@ export default function RecentChanges({
                         key={change.category}
                         className="flex items-center justify-between gap-2 text-sm"
                       >
-                        <span className="flex items-center gap-2 text-green-700">
+                        <span className="flex items-center gap-2 text-green-700 dark:text-green-400">
                           <FasterIcon />
                           {change.category}
                         </span>
-                        <span className="font-medium text-green-600">
+                        <span className="font-medium text-green-600 dark:text-green-400">
                           {formatPercentChange(change.percentageChange)}
                         </span>
                       </li>
@@ -193,11 +175,8 @@ export default function RecentChanges({
               )}
 
               {slowerCategories.length > 0 && (
-                <div
-                  className="rounded-lg border border-[#E8E4DF] p-4"
-                  style={{ backgroundColor: "#FEF2F2" }}
-                >
-                  <h3 className="mb-2 font-serif text-base font-semibold text-red-800">
+                <div className="rounded-lg border border-red-200 dark:border-red-800 p-4 bg-red-50 dark:bg-red-900/20">
+                  <h3 className="mb-2 font-serif text-base font-semibold text-red-800 dark:text-red-400">
                     Getting Slower
                   </h3>
                   <ul className="space-y-2">
@@ -206,11 +185,11 @@ export default function RecentChanges({
                         key={change.category}
                         className="flex items-center justify-between gap-2 text-sm"
                       >
-                        <span className="flex items-center gap-2 text-red-700">
+                        <span className="flex items-center gap-2 text-red-700 dark:text-red-400">
                           <SlowerIcon />
                           {change.category}
                         </span>
-                        <span className="font-medium text-red-600">
+                        <span className="font-medium text-red-600 dark:text-red-400">
                           {formatPercentChange(change.percentageChange)}
                         </span>
                       </li>
@@ -223,37 +202,34 @@ export default function RecentChanges({
 
           {/* Largest overrun tasks table */}
           {hasOverruns && (
-            <div
-              className="overflow-x-auto rounded-lg border border-[#E8E4DF]"
-              style={{ backgroundColor: "#FFF8F0" }}
-            >
-              <h3 className="px-4 pt-4 pb-2 font-serif text-base font-semibold text-[#1A1A1A]">
+            <div className="overflow-x-auto rounded-lg border border-dark-border bg-dark-surface">
+              <h3 className="px-4 pt-4 pb-2 font-serif text-base font-semibold text-text-primary">
                 Largest Time Overruns
               </h3>
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-[#E8E4DF] bg-white/60">
+                  <tr className="border-b border-dark-border bg-dark-card/60">
                     <th
                       scope="col"
-                      className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-[#6B6B6B]"
+                      className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-text-secondary"
                     >
                       Task
                     </th>
                     <th
                       scope="col"
-                      className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-[#6B6B6B]"
+                      className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-text-secondary"
                     >
                       Estimated
                     </th>
                     <th
                       scope="col"
-                      className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-[#6B6B6B]"
+                      className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-text-secondary"
                     >
                       Actual
                     </th>
                     <th
                       scope="col"
-                      className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-[#6B6B6B]"
+                      className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-text-secondary"
                     >
                       Overrun
                     </th>
@@ -263,21 +239,21 @@ export default function RecentChanges({
                   {displayedOverruns.map((task, index) => (
                     <tr
                       key={`${task.description}-${index}`}
-                      className="border-b border-[#E8E4DF] last:border-b-0 transition-colors hover:bg-white/40"
+                      className="border-b border-dark-border last:border-b-0 transition-colors hover:bg-dark-hover/40"
                     >
                       <td
-                        className="px-4 py-3 text-[#1A1A1A] max-w-xs truncate"
+                        className="px-4 py-3 text-text-primary max-w-xs truncate"
                         title={task.description}
                       >
                         {task.description}
                       </td>
-                      <td className="px-4 py-3 text-[#4A4A4A]">
+                      <td className="px-4 py-3 text-text-secondary">
                         {formatMinutes(task.estimatedTime)}
                       </td>
-                      <td className="px-4 py-3 text-[#4A4A4A]">
+                      <td className="px-4 py-3 text-text-secondary">
                         {formatMinutes(task.actualTime)}
                       </td>
-                      <td className="px-4 py-3 font-medium text-red-600">
+                      <td className="px-4 py-3 font-medium text-red-600 dark:text-red-400">
                         +{formatMinutes(task.overrunMinutes)}
                       </td>
                     </tr>
@@ -289,18 +265,15 @@ export default function RecentChanges({
 
           {/* Limited-data categories */}
           {hasLimitedData && (
-            <div
-              className="rounded-lg border border-[#E8E4DF] p-4"
-              style={{ backgroundColor: "#FFFBEB" }}
-            >
-              <h3 className="mb-2 font-serif text-base font-semibold text-amber-800">
+            <div className="rounded-lg border border-amber-200 dark:border-amber-800 p-4 bg-amber-50 dark:bg-amber-900/20">
+              <h3 className="mb-2 font-serif text-base font-semibold text-amber-800 dark:text-amber-400">
                 Categories with Limited Data
               </h3>
               <ul className="space-y-1">
                 {limitedDataCategories.map((category) => (
                   <li
                     key={category}
-                    className="flex items-center gap-2 text-sm text-amber-700"
+                    className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400"
                   >
                     <LimitedDataIcon />
                     {category}

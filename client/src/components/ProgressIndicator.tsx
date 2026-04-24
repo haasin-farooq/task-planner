@@ -26,25 +26,12 @@ export default function ProgressIndicator({
 
   return (
     <section aria-label="Daily progress">
-      <h3>Daily Progress</h3>
+      <h3 className="text-text-primary font-semibold">Daily Progress</h3>
 
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "0.75rem",
-          marginBottom: "0.5rem",
-        }}
-      >
+      <div className="flex items-center gap-3 mb-2">
         {/* Progress bar track */}
         <div
-          style={{
-            flex: 1,
-            height: "1.25rem",
-            backgroundColor: "#e5e7eb",
-            borderRadius: "0.625rem",
-            overflow: "hidden",
-          }}
+          className="flex-1 h-5 bg-dark-border rounded-[0.625rem] overflow-hidden"
           role="progressbar"
           aria-valuenow={Math.round(percent)}
           aria-valuemin={0}
@@ -55,12 +42,10 @@ export default function ProgressIndicator({
           {/* Filled portion */}
           <div
             data-testid="progress-bar-fill"
+            className="h-full rounded-[0.625rem] transition-all duration-300 ease-in-out"
             style={{
-              height: "100%",
               width: `${percent}%`,
               backgroundColor: percent === 100 ? "#16a34a" : "#3b82f6",
-              borderRadius: "0.625rem",
-              transition: "width 0.3s ease, background-color 0.3s ease",
             }}
           />
         </div>
@@ -68,7 +53,7 @@ export default function ProgressIndicator({
         {/* Percentage label */}
         <span
           data-testid="progress-percent"
-          style={{ fontWeight: 600, minWidth: "3.5rem", textAlign: "right" }}
+          className="font-semibold min-w-[3.5rem] text-right text-text-primary"
         >
           {Math.round(percent)}%
         </span>
@@ -77,7 +62,7 @@ export default function ProgressIndicator({
       {/* Task count */}
       <p
         data-testid="progress-count"
-        style={{ fontSize: "0.875rem", color: "#6b7280", margin: 0 }}
+        className="text-sm text-text-secondary m-0"
       >
         {completed} of {total} task{total !== 1 ? "s" : ""} completed
       </p>

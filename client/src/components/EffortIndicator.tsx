@@ -58,7 +58,9 @@ export default function EffortIndicator({
           className="text-accent"
         />
       </svg>
-      <span className="text-sm text-[#6B6B6B]">{Math.round(clamped)}%</span>
+      <span className="text-sm text-text-secondary">
+        {Math.round(clamped)}%
+      </span>
     </span>
   );
 }

@@ -138,7 +138,7 @@ export default function LeftSidebar({ isOpen, onClose }: LeftSidebarProps) {
               />
             </svg>
           </div>
-          <span className="text-[#1A1A1A] font-semibold text-lg">
+          <span className="text-text-primary font-semibold text-lg">
             TaskPlanner
           </span>
         </div>
@@ -148,7 +148,7 @@ export default function LeftSidebar({ isOpen, onClose }: LeftSidebarProps) {
           <ul className="space-y-1">
             {navItems.map((item) => (
               <li key={item.path}>
-                <span className="block px-3 pt-3 pb-1 text-[10px] font-semibold tracking-widest text-[#6B6B6B] uppercase">
+                <span className="block px-3 pt-3 pb-1 text-[10px] font-semibold tracking-widest text-text-secondary uppercase">
                   {item.section}
                 </span>
                 <NavLink
@@ -160,7 +160,7 @@ export default function LeftSidebar({ isOpen, onClose }: LeftSidebarProps) {
                     ${
                       isActive
                         ? "bg-accent text-white"
-                        : "text-[#6B6B6B] hover:text-[#1A1A1A] hover:bg-dark-border"
+                        : "text-text-secondary hover:text-text-primary hover:bg-dark-hover"
                     }`
                   }
                 >
