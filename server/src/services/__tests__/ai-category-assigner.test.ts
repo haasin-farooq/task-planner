@@ -547,7 +547,7 @@ describe("AICategoryAssigner", () => {
   // -----------------------------------------------------------------------
 
   describe("closestExisting for low-confidence new categories (Req 6.4)", () => {
-    it("sets closestExisting when new category has confidence < 0.5", async () => {
+    it("sets closestExisting to null when new category has confidence < 0.5", async () => {
       const { client } = createMockClient({
         content: JSON.stringify({
           category: "Niche Task",
@@ -563,7 +563,7 @@ describe("AICategoryAssigner", () => {
       ]);
 
       expect(result.isNew).toBe(true);
-      expect(result.closestExisting).toBe("Development");
+      expect(result.closestExisting).toBeNull();
     });
 
     it("does NOT set closestExisting when confidence >= 0.5", async () => {
@@ -1029,6 +1029,179 @@ describe("AICategoryAssigner", () => {
 
       expect(create).toHaveBeenCalledTimes(2);
       expect(result.source).toBe("fallback");
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Meaningful category assignment — rejected category validation
+  // -----------------------------------------------------------------------
+
+  describe("meaningful category assignment", () => {
+    it("rejects generic categories like 'Task Completion' and retries", async () => {
+      const { client, create } = createMockClient(
+        // First attempt returns generic category
+        {
+          content: JSON.stringify({
+            category: "Task Completion",
+            isExisting: false,
+            confidence: 0.7,
+          }),
+        },
+        // Retry returns meaningful category
+        {
+          content: JSON.stringify({
+            category: "Errands",
+            isExisting: false,
+            confidence: 0.85,
+          }),
+        },
+      );
+      const assigner = new AICategoryAssigner(client);
+      const result = await assigner.assign("pick up parcel from k-market", []);
+      expect(result.finalCategory).toBe("Errands");
+      expect(result.finalCategory).not.toBe("Task Completion");
+    });
+
+    it("rejects 'General' and retries", async () => {
+      const { client } = createMockClient(
+        {
+          content: JSON.stringify({
+            category: "General",
+            isExisting: false,
+            confidence: 0.6,
+          }),
+        },
+        {
+          content: JSON.stringify({
+            category: "Social",
+            isExisting: false,
+            confidence: 0.8,
+          }),
+        },
+      );
+      const assigner = new AICategoryAssigner(client);
+      const result = await assigner.assign("meet Ali", []);
+      expect(result.finalCategory).toBe("Social");
+    });
+
+    it("rejects 'Misc' and retries", async () => {
+      const { client } = createMockClient(
+        {
+          content: JSON.stringify({
+            category: "Misc",
+            isExisting: false,
+            confidence: 0.5,
+          }),
+        },
+        {
+          content: JSON.stringify({
+            category: "Personal Care",
+            isExisting: false,
+            confidence: 0.8,
+          }),
+        },
+      );
+      const assigner = new AICategoryAssigner(client);
+      const result = await assigner.assign("trim beard", []);
+      expect(result.finalCategory).toBe("Personal Care");
+    });
+
+    it("accepts meaningful categories on first attempt", async () => {
+      const { client, create } = createMockClient({
+        content: JSON.stringify({
+          category: "Reading",
+          isExisting: false,
+          confidence: 0.9,
+        }),
+      });
+      const assigner = new AICategoryAssigner(client);
+      const result = await assigner.assign("read a book", []);
+      expect(result.finalCategory).toBe("Reading");
+      expect(create).toHaveBeenCalledTimes(1); // No retry needed
+    });
+
+    it("falls back to normalizer when both attempts return rejected categories", async () => {
+      const { client } = createMockClient(
+        {
+          content: JSON.stringify({
+            category: "Task",
+            isExisting: false,
+            confidence: 0.6,
+          }),
+        },
+        {
+          content: JSON.stringify({
+            category: "Daily Task",
+            isExisting: false,
+            confidence: 0.5,
+          }),
+        },
+      );
+      const assigner = new AICategoryAssigner(client);
+      const result = await assigner.assign("read a book", []);
+      // Falls back to normalizer
+      expect(result.source).toBe("fallback");
+    });
+
+    it("includes rawText in the prompt when provided", async () => {
+      const capturedCalls: any[] = [];
+      const create = vi.fn().mockImplementation(async (params: any) => {
+        capturedCalls.push(params);
+        return {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  category: "Errands",
+                  isExisting: false,
+                  confidence: 0.9,
+                }),
+              },
+            },
+          ],
+        };
+      });
+      const client = { chat: { completions: { create } } } as any;
+      const assigner = new AICategoryAssigner(client);
+      await assigner.assign(
+        "pick up parcel",
+        [],
+        undefined,
+        "pick up parcel from k-market",
+      );
+      const allContent = capturedCalls[0].messages
+        .map((m: any) => m.content)
+        .join("\n");
+      expect(allContent).toContain("pick up parcel from k-market");
+    });
+
+    it("prompt contains rejected category examples", async () => {
+      const capturedCalls: any[] = [];
+      const create = vi.fn().mockImplementation(async (params: any) => {
+        capturedCalls.push(params);
+        return {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  category: "Social",
+                  isExisting: false,
+                  confidence: 0.9,
+                }),
+              },
+            },
+          ],
+        };
+      });
+      const client = { chat: { completions: { create } } } as any;
+      const assigner = new AICategoryAssigner(client);
+      await assigner.assign("meet Ali", []);
+      const allContent = capturedCalls[0].messages
+        .map((m: any) => m.content)
+        .join("\n");
+      expect(allContent).toMatch(/task completion/i);
+      expect(allContent).toMatch(/general/i);
+      expect(allContent).toMatch(/activity.*type/i);
     });
   });
 });

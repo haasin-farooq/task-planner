@@ -315,6 +315,33 @@ describe("Property 3: Category assignment returns correct result for LLM respons
             fc.pre(!existingLower.has(newCategory.toLowerCase()));
           }
 
+          // Skip rejected categories — they trigger a retry path
+          const REJECTED = new Set([
+            "task completion",
+            "general",
+            "misc",
+            "miscellaneous",
+            "other",
+            "daily task",
+            "personal task",
+            "task",
+            "activity",
+            "to do",
+            "various",
+            "routine",
+            "daily",
+            "stuff",
+            "things",
+            "work",
+            "personal",
+            "life",
+            "day",
+            "todo",
+            "chore",
+            "chores",
+          ]);
+          fc.pre(!REJECTED.has(newCategory.toLowerCase().trim()));
+
           const client = createMockClientReturning(newCategory, false);
           const assigner = new AICategoryAssigner(client);
           const result = await assigner.assign(description, categories);
@@ -544,6 +571,33 @@ describe("Property 5: Category Name Validation — Three Word Limit", () => {
           );
           fc.pre(!existingLower.has(proposedName.toLowerCase()));
 
+          // Skip rejected categories — they trigger a retry path
+          const REJECTED = new Set([
+            "task completion",
+            "general",
+            "misc",
+            "miscellaneous",
+            "other",
+            "daily task",
+            "personal task",
+            "task",
+            "activity",
+            "to do",
+            "various",
+            "routine",
+            "daily",
+            "stuff",
+            "things",
+            "work",
+            "personal",
+            "life",
+            "day",
+            "todo",
+            "chore",
+            "chores",
+          ]);
+          fc.pre(!REJECTED.has(proposedName.toLowerCase().trim()));
+
           const client = createMockClientProposingNew(proposedName);
           const assigner = new AICategoryAssigner(client);
           const result = await assigner.assign(description, existingCategories);
@@ -577,6 +631,33 @@ describe("Property 5: Category Name Validation — Three Word Limit", () => {
             existingCategories.map((c) => c.toLowerCase()),
           );
           fc.pre(!existingLower.has(proposedName.toLowerCase()));
+
+          // Skip rejected categories — they trigger a retry path
+          const REJECTED = new Set([
+            "task completion",
+            "general",
+            "misc",
+            "miscellaneous",
+            "other",
+            "daily task",
+            "personal task",
+            "task",
+            "activity",
+            "to do",
+            "various",
+            "routine",
+            "daily",
+            "stuff",
+            "things",
+            "work",
+            "personal",
+            "life",
+            "day",
+            "todo",
+            "chore",
+            "chores",
+          ]);
+          fc.pre(!REJECTED.has(proposedName.toLowerCase().trim()));
 
           const client = createMockClientProposingNew(proposedName);
           const assigner = new AICategoryAssigner(client);
