@@ -32,7 +32,12 @@ export interface ParseResult {
 export interface CategoryEntity {
   id: number;
   name: string;
+  userId: string;
+  status: "active" | "merged" | "archived";
+  createdBy: "llm" | "user" | "system" | "fallback";
+  mergedIntoCategoryId: number | null;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface CategoryAssignmentResult {
@@ -42,6 +47,14 @@ export interface CategoryAssignmentResult {
   finalCategory: string;
   /** Whether the LLM proposed a new category (not in the existing list) */
   isNew: boolean;
+  /** LLM confidence score 0.0-1.0, or 0.0 for fallback */
+  confidence: number;
+  /** How the category was assigned */
+  source: "llm" | "fallback";
+  /** When confidence < 0.5 and isNew, the closest existing category */
+  closestExisting: string | null;
+  /** Whether the assignment is flagged as low confidence */
+  lowConfidence: boolean;
 }
 
 // --- Task Analyzer ---
@@ -65,6 +78,8 @@ export interface AnalyzedTask extends ParsedTask {
   category?: string;
   /** Foreign key to categories table */
   categoryId?: number;
+  /** LLM confidence score for the category assignment (0.0-1.0) */
+  categoryConfidence?: number;
 }
 
 export interface CircularDependencyError {
@@ -91,6 +106,12 @@ export interface CompletionRecord {
   /** 1-5 */
   difficultyLevel: number;
   completedAt: Date;
+  /** The raw category string returned by the LLM (before resolution), or null if fallback */
+  rawLLMCategory?: string | null;
+  /** LLM confidence score for the category assignment (0.0-1.0) */
+  categoryConfidence?: number | null;
+  /** How the category was assigned: 'llm', 'fallback', or 'user' */
+  categorySource?: "llm" | "fallback" | "user" | null;
 }
 
 export interface CategoryAdjustment {
@@ -147,7 +168,34 @@ export interface PreferenceProfile {
 
 // --- Extended Analytics (Analytics Dashboard Redesign) ---
 
-/** Canonical category labels produced by CategoryNormalizer */
+// --- Category Consolidation ---
+
+export type SuggestionAction = "merge" | "rename" | "split";
+
+export interface ConsolidationSuggestion {
+  id: string; // UUID for tracking
+  action: SuggestionAction;
+  // For merge:
+  sourceCategoryId?: number;
+  sourceCategoryName?: string;
+  targetCategoryId?: number;
+  targetCategoryName?: string;
+  // For rename / split:
+  categoryId?: number;
+  currentName?: string;
+  // For rename:
+  proposedName?: string;
+  // For split:
+  proposedNames?: string[];
+  // Common:
+  reason: string;
+}
+
+/**
+ * @deprecated Categories are now dynamic and AI-driven per user.
+ * This type is retained only for backward compatibility with the keyword normalizer fallback.
+ * Use dynamic category names from the CategoryEntity instead.
+ */
 export type CanonicalCategory =
   | "Writing"
   | "Development"

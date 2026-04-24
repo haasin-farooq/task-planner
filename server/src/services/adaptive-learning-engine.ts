@@ -61,9 +61,11 @@ export class AdaptiveLearningEngine {
    * Persist a completion record and update the rolling behavioural
    * adjustments for the task's category.
    *
-   * The category is taken from `record.description` — in a full
-   * implementation the LLM would assign a canonical category, but for now
-   * we use the description directly as the category key.
+   * When a CategoryRepository is available, the category is resolved via
+   * `categoryRepo.create(name, userId, createdBy)` using per-user scoping
+   * (Req 17.1). Category metadata (raw_llm_category, category_confidence,
+   * category_source) is stored on the completion_history row (Req 9.5).
+   * Behavioral adjustments are grouped by category_id (Req 17.2, 17.3).
    */
   recordCompletion(record: CompletionRecord): void {
     const category = record.description;
@@ -74,30 +76,55 @@ export class AdaptiveLearningEngine {
         .prepare("INSERT OR IGNORE INTO users (id) VALUES (?)")
         .run(record.userId);
 
-      // Resolve category_id via CategoryRepository when available (Req 6.1)
+      // Resolve category_id via CategoryRepository when available (Req 17.1)
       const normalizedCategory = normalize(category);
       let categoryId: number | null = null;
+      let categoryName: string = normalizedCategory;
+
       if (this.categoryRepo) {
-        const categoryEntity =
-          this.categoryRepo.upsertByName(normalizedCategory);
+        // Use per-user scoped create instead of legacy upsertByName (Req 17.1)
+        const createdBy =
+          record.categorySource === "llm"
+            ? "llm"
+            : record.categorySource === "user"
+              ? "user"
+              : record.categorySource === "fallback"
+                ? "fallback"
+                : "system";
+        const categoryEntity = this.categoryRepo.create(
+          normalizedCategory,
+          record.userId,
+          createdBy,
+        );
         categoryId = categoryEntity.id;
+        categoryName = categoryEntity.name;
       }
 
-      // 1. Insert into completion_history (include category_id when resolved)
+      // Extract category metadata from the record (Req 9.5)
+      const rawLLMCategory = record.rawLLMCategory ?? null;
+      const categoryConfidence = record.categoryConfidence ?? null;
+      const categorySource = record.categorySource ?? null;
+
+      // 1. Insert into completion_history with category metadata
       if (categoryId !== null) {
         this.db
           .prepare(
             `INSERT INTO completion_history
-               (id, user_id, task_description, category, normalized_category, category_id, estimated_time, actual_time, difficulty_level, completed_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+               (id, user_id, task_description, category, normalized_category, category_id,
+                raw_llm_category, category_confidence, category_source,
+                estimated_time, actual_time, difficulty_level, completed_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .run(
             uuidv4(),
             record.userId,
             record.description,
             category,
-            normalizedCategory,
+            categoryName,
             categoryId,
+            rawLLMCategory,
+            categoryConfidence,
+            categorySource,
             record.estimatedTime,
             record.actualTime,
             record.difficultyLevel,
@@ -107,8 +134,10 @@ export class AdaptiveLearningEngine {
         this.db
           .prepare(
             `INSERT INTO completion_history
-               (id, user_id, task_description, category, normalized_category, estimated_time, actual_time, difficulty_level, completed_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+               (id, user_id, task_description, category, normalized_category,
+                raw_llm_category, category_confidence, category_source,
+                estimated_time, actual_time, difficulty_level, completed_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .run(
             uuidv4(),
@@ -116,6 +145,9 @@ export class AdaptiveLearningEngine {
             record.description,
             category,
             normalizedCategory,
+            rawLLMCategory,
+            categoryConfidence,
+            categorySource,
             record.estimatedTime,
             record.actualTime,
             record.difficultyLevel,
@@ -124,9 +156,7 @@ export class AdaptiveLearningEngine {
       }
 
       // 2. Recompute the rolling average for this (user, category) pair.
-      //    We query *all* history rows for the category so the multiplier
-      //    is a true average rather than an incremental approximation.
-      //    When category_id is available, group by category_id (Req 6.2);
+      //    When category_id is available, group by category_id (Req 17.2);
       //    otherwise fall back to grouping by the raw category text.
       let rows: { actual_time: number; estimated_time: number }[];
       if (categoryId !== null) {
@@ -164,9 +194,9 @@ export class AdaptiveLearningEngine {
       const difficultyAdjustment = timeMultiplier - 1.0;
 
       // 3. Upsert behavioral_adjustments
-      //    When category_id is available, use the normalized category name as
-      //    the category column so that ON CONFLICT(user_id, category) correctly
-      //    groups all descriptions that resolve to the same category (Req 6.2, 6.3).
+      //    When category_id is available, use the category name from the
+      //    categories table so that ON CONFLICT(user_id, category) correctly
+      //    groups all descriptions that resolve to the same category (Req 17.2, 17.3).
       //    Otherwise fall back to the raw category text.
       if (categoryId !== null) {
         this.db
@@ -183,7 +213,7 @@ export class AdaptiveLearningEngine {
           )
           .run(
             record.userId,
-            normalizedCategory,
+            categoryName,
             categoryId,
             timeMultiplier,
             difficultyAdjustment,

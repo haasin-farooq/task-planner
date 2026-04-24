@@ -14,7 +14,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import fc from "fast-check";
 import Database from "better-sqlite3";
-import { runMigrations, SCHEMA_SQL } from "../schema.js";
+import { runMigrations } from "../schema.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -49,18 +49,107 @@ const categorySubsetArb = fc
   .filter((arr) => arr.length > 0);
 
 // ---------------------------------------------------------------------------
+// Legacy schema & seeding helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * The old categories table schema (before the dynamic-ai-categories migration).
+ * Used to simulate pre-migration database state in tests.
+ */
+const LEGACY_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS preference_profiles (
+  user_id TEXT PRIMARY KEY REFERENCES users(id),
+  strategy TEXT NOT NULL DEFAULT 'highest-priority-first',
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS task_sessions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  raw_input TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS tasks (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES task_sessions(id),
+  description TEXT NOT NULL,
+  raw_text TEXT NOT NULL,
+  is_ambiguous BOOLEAN DEFAULT FALSE,
+  priority INTEGER CHECK (priority BETWEEN 1 AND 5),
+  effort_percentage REAL CHECK (effort_percentage BETWEEN 0 AND 100),
+  difficulty_level INTEGER CHECK (difficulty_level BETWEEN 1 AND 5),
+  estimated_time INTEGER,
+  is_completed BOOLEAN DEFAULT FALSE,
+  actual_time INTEGER,
+  completed_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS task_dependencies (
+  task_id TEXT NOT NULL REFERENCES tasks(id),
+  depends_on_task_id TEXT NOT NULL REFERENCES tasks(id),
+  PRIMARY KEY (task_id, depends_on_task_id)
+);
+
+CREATE TABLE IF NOT EXISTS completion_history (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  task_description TEXT NOT NULL,
+  category TEXT,
+  estimated_time INTEGER NOT NULL,
+  actual_time INTEGER NOT NULL,
+  difficulty_level INTEGER NOT NULL,
+  completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS behavioral_adjustments (
+  user_id TEXT NOT NULL REFERENCES users(id),
+  category TEXT NOT NULL,
+  time_multiplier REAL NOT NULL DEFAULT 1.0,
+  difficulty_adjustment REAL NOT NULL DEFAULT 0.0,
+  sample_size INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, category)
+);
+
+CREATE TABLE IF NOT EXISTS categories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+`;
+
+/** Seed the 10 canonical categories (old behavior) into a legacy DB */
+function seedLegacyCategories(db: Database.Database): void {
+  const seedStmt = db.prepare(
+    "INSERT OR IGNORE INTO categories (name) VALUES (?)",
+  );
+  for (const name of SEEDED_CATEGORIES) {
+    seedStmt.run(name);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 /**
- * Create a fresh in-memory database with the base schema (no migrations).
- * This simulates a pre-migration state.
+ * Create a fresh in-memory database with the legacy schema and seeded
+ * categories. This simulates a pre-migration state where categories were
+ * automatically seeded.
  */
 function createPreMigrationDb(): Database.Database {
   const db = new Database(":memory:");
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
-  db.exec(SCHEMA_SQL);
+  db.exec(LEGACY_SCHEMA_SQL);
+  seedLegacyCategories(db);
   return db;
 }
 

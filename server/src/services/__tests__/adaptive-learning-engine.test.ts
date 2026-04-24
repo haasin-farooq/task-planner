@@ -456,4 +456,273 @@ describe("AdaptiveLearningEngine — category_id integration", () => {
       expect(adj.sampleSize).toBe(1);
     }
   });
+
+  // --- Req 17.1: category metadata stored on completion_history ---
+
+  it("should store raw_llm_category, category_confidence, category_source in completion_history (Req 17.1)", () => {
+    engine.recordCompletion(
+      makeRecord({
+        description: "implement auth module",
+        rawLLMCategory: "Software Development",
+        categoryConfidence: 0.92,
+        categorySource: "llm",
+      }),
+    );
+
+    const row = db
+      .prepare(
+        `SELECT raw_llm_category, category_confidence, category_source
+         FROM completion_history WHERE user_id = ?`,
+      )
+      .get("user-1") as {
+      raw_llm_category: string | null;
+      category_confidence: number | null;
+      category_source: string | null;
+    };
+
+    expect(row.raw_llm_category).toBe("Software Development");
+    expect(row.category_confidence).toBeCloseTo(0.92, 4);
+    expect(row.category_source).toBe("llm");
+  });
+
+  it("should store null metadata when category metadata fields are not provided (Req 17.1)", () => {
+    // Record without optional metadata fields
+    engine.recordCompletion(
+      makeRecord({
+        description: "write tests",
+      }),
+    );
+
+    const row = db
+      .prepare(
+        `SELECT raw_llm_category, category_confidence, category_source
+         FROM completion_history WHERE user_id = ?`,
+      )
+      .get("user-1") as {
+      raw_llm_category: string | null;
+      category_confidence: number | null;
+      category_source: string | null;
+    };
+
+    expect(row.raw_llm_category).toBeNull();
+    expect(row.category_confidence).toBeNull();
+    expect(row.category_source).toBeNull();
+  });
+
+  it("should store fallback metadata correctly (Req 17.1)", () => {
+    engine.recordCompletion(
+      makeRecord({
+        description: "organize desk",
+        rawLLMCategory: null,
+        categoryConfidence: 0.0,
+        categorySource: "fallback",
+      }),
+    );
+
+    const row = db
+      .prepare(
+        `SELECT raw_llm_category, category_confidence, category_source
+         FROM completion_history WHERE user_id = ?`,
+      )
+      .get("user-1") as {
+      raw_llm_category: string | null;
+      category_confidence: number | null;
+      category_source: string | null;
+    };
+
+    expect(row.raw_llm_category).toBeNull();
+    expect(row.category_confidence).toBeCloseTo(0.0, 4);
+    expect(row.category_source).toBe("fallback");
+  });
+
+  // --- Req 17.1: per-user category resolution via categoryRepo.create ---
+
+  it("should resolve category via categoryRepo.create with per-user scoping (Req 17.1)", () => {
+    // Record completions for two different users with the same description
+    engine.recordCompletion(
+      makeRecord({
+        userId: "user-a",
+        taskId: "t1",
+        description: "coding task",
+      }),
+    );
+    engine.recordCompletion(
+      makeRecord({
+        userId: "user-b",
+        taskId: "t2",
+        description: "coding task",
+      }),
+    );
+
+    // Each user should have their own category row in the categories table
+    const catA = categoryRepo.findByNameAndUserId("Development", "user-a");
+    const catB = categoryRepo.findByNameAndUserId("Development", "user-b");
+
+    expect(catA).not.toBeNull();
+    expect(catB).not.toBeNull();
+    // They should be separate category rows (different IDs)
+    expect(catA!.id).not.toBe(catB!.id);
+    expect(catA!.userId).toBe("user-a");
+    expect(catB!.userId).toBe("user-b");
+  });
+
+  it("should use the correct createdBy based on categorySource (Req 17.1)", () => {
+    engine.recordCompletion(
+      makeRecord({
+        taskId: "t1",
+        description: "write docs",
+        categorySource: "llm",
+      }),
+    );
+
+    // The category should have been created with createdBy = 'llm'
+    const row = db
+      .prepare(
+        `SELECT category_id FROM completion_history WHERE user_id = ? AND task_description = ?`,
+      )
+      .get("user-1", "write docs") as { category_id: number };
+
+    const category = categoryRepo.findById(row.category_id);
+    expect(category).not.toBeNull();
+    expect(category!.createdBy).toBe("llm");
+  });
+
+  it("should default createdBy to 'system' when categorySource is not provided (Req 17.1)", () => {
+    engine.recordCompletion(
+      makeRecord({
+        taskId: "t1",
+        description: "plan sprint",
+      }),
+    );
+
+    const row = db
+      .prepare(`SELECT category_id FROM completion_history WHERE user_id = ?`)
+      .get("user-1") as { category_id: number };
+
+    const category = categoryRepo.findById(row.category_id);
+    expect(category).not.toBeNull();
+    expect(category!.createdBy).toBe("system");
+  });
+
+  // --- Req 17.2, 17.3: behavioral adjustments grouped by category_id ---
+
+  it("should group behavioral adjustments by category_id so renamed categories use the new name (Req 17.2, 17.3)", () => {
+    // Record some completions
+    engine.recordCompletion(
+      makeRecord({
+        taskId: "t1",
+        description: "write blog post",
+        actualTime: 45,
+        estimatedTime: 60,
+      }),
+    );
+    engine.recordCompletion(
+      makeRecord({
+        taskId: "t2",
+        description: "write documentation",
+        actualTime: 90,
+        estimatedTime: 60,
+      }),
+    );
+
+    // Both descriptions normalize to "Writing" via the keyword normalizer,
+    // so they share the same category_id
+    let model = engine.getBehavioralModel("user-1");
+    expect(model.adjustments).toHaveLength(1);
+    const originalName = model.adjustments[0].category;
+
+    // Now rename the category
+    const catRow = db
+      .prepare(
+        `SELECT category_id FROM behavioral_adjustments WHERE user_id = ?`,
+      )
+      .get("user-1") as { category_id: number };
+    categoryRepo.rename(catRow.category_id, "Content Creation");
+
+    // The behavioral model should now use the new name from the categories table
+    model = engine.getBehavioralModel("user-1");
+    expect(model.adjustments).toHaveLength(1);
+    expect(model.adjustments[0].category).toBe("Content Creation");
+    expect(model.adjustments[0].category).not.toBe(originalName);
+  });
+
+  it("should maintain separate behavioral adjustments per user via category_id (Req 17.2, 17.3)", () => {
+    // User A records coding tasks — consistently fast
+    engine.recordCompletion(
+      makeRecord({
+        userId: "user-a",
+        taskId: "t1",
+        description: "coding",
+        actualTime: 30,
+        estimatedTime: 60,
+      }),
+    );
+
+    // User B records coding tasks — consistently slow
+    engine.recordCompletion(
+      makeRecord({
+        userId: "user-b",
+        taskId: "t2",
+        description: "coding",
+        actualTime: 120,
+        estimatedTime: 60,
+      }),
+    );
+
+    const modelA = engine.getBehavioralModel("user-a");
+    const modelB = engine.getBehavioralModel("user-b");
+
+    expect(modelA.adjustments).toHaveLength(1);
+    expect(modelB.adjustments).toHaveLength(1);
+
+    // User A is faster (multiplier < 1), User B is slower (multiplier > 1)
+    expect(modelA.adjustments[0].timeMultiplier).toBeCloseTo(0.5, 4);
+    expect(modelB.adjustments[0].timeMultiplier).toBeCloseTo(2.0, 4);
+
+    // Both adjustments should reference their own category_id (per-user scoping)
+    const adjRowA = db
+      .prepare(
+        `SELECT category_id FROM behavioral_adjustments WHERE user_id = ?`,
+      )
+      .get("user-a") as { category_id: number };
+    const adjRowB = db
+      .prepare(
+        `SELECT category_id FROM behavioral_adjustments WHERE user_id = ?`,
+      )
+      .get("user-b") as { category_id: number };
+
+    expect(adjRowA.category_id).not.toBe(adjRowB.category_id);
+  });
+
+  it("should store category_id on both completion_history and behavioral_adjustments (Req 17.2, 17.3)", () => {
+    engine.recordCompletion(
+      makeRecord({
+        description: "review pull request",
+      }),
+    );
+
+    // Check completion_history has category_id
+    const historyRow = db
+      .prepare(`SELECT category_id FROM completion_history WHERE user_id = ?`)
+      .get("user-1") as { category_id: number | null };
+
+    // Check behavioral_adjustments has category_id
+    const adjRow = db
+      .prepare(
+        `SELECT category_id FROM behavioral_adjustments WHERE user_id = ?`,
+      )
+      .get("user-1") as { category_id: number | null };
+
+    expect(historyRow.category_id).not.toBeNull();
+    expect(adjRow.category_id).not.toBeNull();
+
+    // Both should reference the same category
+    expect(historyRow.category_id).toBe(adjRow.category_id);
+
+    // And the category should exist in the categories table
+    const category = categoryRepo.findById(historyRow.category_id!);
+    expect(category).not.toBeNull();
+    expect(category!.userId).toBe("user-1");
+    expect(category!.status).toBe("active");
+  });
 });

@@ -13,6 +13,7 @@ import { AnalyticsAggregator } from "./services/analytics-aggregator.js";
 import { PreferenceProfileStore } from "./services/preference-profile-store.js";
 import { CategoryRepository } from "./db/category-repository.js";
 import { AICategoryAssigner } from "./services/ai-category-assigner.js";
+import { CategoryConsolidator } from "./services/category-consolidator.js";
 
 const PORT = process.env.PORT || 3001;
 
@@ -22,6 +23,7 @@ const db = getDb();
 // Create service instances
 const categoryRepo = new CategoryRepository(db);
 const categoryAssigner = new AICategoryAssigner();
+const categoryConsolidator = new CategoryConsolidator();
 const learningEngine = new AdaptiveLearningEngine(db, categoryRepo);
 const parser = new TaskInputParser();
 const analyzer = new TaskAnalyzer(
@@ -43,6 +45,7 @@ const app = createApp({
   analytics,
   preferenceStore,
   categoryRepo,
+  categoryConsolidator,
 });
 
 app.listen(PORT, () => {

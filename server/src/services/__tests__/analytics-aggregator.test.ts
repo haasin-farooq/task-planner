@@ -38,14 +38,22 @@ function insertCompletion(
   const userId = overrides.userId ?? "user-1";
   ensureUser(db, userId);
 
-  // Resolve category_id from normalizedCategory if provided
+  // Resolve category_id from normalizedCategory if provided.
+  // Auto-create the category if it doesn't exist (with status='active' and proper user_id).
   let categoryId: number | null = null;
   if (overrides.normalizedCategory) {
     const catRow = db
-      .prepare("SELECT id FROM categories WHERE name = ?")
-      .get(overrides.normalizedCategory) as { id: number } | undefined;
+      .prepare("SELECT id FROM categories WHERE name = ? AND user_id = ?")
+      .get(overrides.normalizedCategory, userId) as { id: number } | undefined;
     if (catRow) {
       categoryId = catRow.id;
+    } else {
+      const result = db
+        .prepare(
+          "INSERT INTO categories (name, user_id, status, created_by) VALUES (?, ?, 'active', 'system')",
+        )
+        .run(overrides.normalizedCategory, userId);
+      categoryId = Number(result.lastInsertRowid);
     }
   }
 
@@ -1522,12 +1530,32 @@ describe("AnalyticsAggregator", () => {
   // =========================================================================
 
   describe("Category ID integration", () => {
+    /**
+     * Helper to ensure a category exists for a user with active status.
+     * Returns the category id.
+     */
+    function ensureCategory(
+      database: Database.Database,
+      name: string,
+      userId: string = "user-1",
+    ): number {
+      ensureUser(database, userId);
+      const existing = database
+        .prepare("SELECT id FROM categories WHERE name = ? AND user_id = ?")
+        .get(name, userId) as { id: number } | undefined;
+      if (existing) return existing.id;
+      const result = database
+        .prepare(
+          "INSERT INTO categories (name, user_id, status, created_by) VALUES (?, ?, 'active', 'system')",
+        )
+        .run(name, userId);
+      return Number(result.lastInsertRowid);
+    }
+
     it("should group category performance stats by category_id, not raw text", () => {
       // Insert records with different raw category text but the same category_id
       // Both "coding" and "programming" map to the "Development" category entity
-      const devCategory = db
-        .prepare("SELECT id FROM categories WHERE name = ?")
-        .get("Development") as { id: number };
+      const devCategoryId = ensureCategory(db, "Development");
 
       ensureUser(db, "user-1");
 
@@ -1542,7 +1570,7 @@ describe("AnalyticsAggregator", () => {
         "write backend code",
         "coding",
         "Development",
-        devCategory.id,
+        devCategoryId,
         60,
         50,
         3,
@@ -1560,7 +1588,7 @@ describe("AnalyticsAggregator", () => {
         "fix frontend bug",
         "programming",
         "Development",
-        devCategory.id,
+        devCategoryId,
         80,
         90,
         3,
@@ -1585,13 +1613,8 @@ describe("AnalyticsAggregator", () => {
     });
 
     it("should return display names from the categories table", () => {
-      // Insert a custom category
-      db.prepare("INSERT OR IGNORE INTO categories (name) VALUES (?)").run(
-        "Data Science",
-      );
-      const customCat = db
-        .prepare("SELECT id FROM categories WHERE name = ?")
-        .get("Data Science") as { id: number };
+      // Insert a custom category with proper user_id
+      const customCatId = ensureCategory(db, "Data Science");
 
       ensureUser(db, "user-1");
 
@@ -1605,7 +1628,7 @@ describe("AnalyticsAggregator", () => {
         "train ML model",
         "ml stuff",
         null,
-        customCat.id,
+        customCatId,
         120,
         150,
         4,
@@ -1634,9 +1657,7 @@ describe("AnalyticsAggregator", () => {
     });
 
     it("should return the new name after a category rename", () => {
-      const devCategory = db
-        .prepare("SELECT id FROM categories WHERE name = ?")
-        .get("Development") as { id: number };
+      const devCategoryId = ensureCategory(db, "Development");
 
       ensureUser(db, "user-1");
 
@@ -1652,7 +1673,7 @@ describe("AnalyticsAggregator", () => {
           `dev task ${i}`,
           "coding",
           "Development",
-          devCategory.id,
+          devCategoryId,
           60,
           50 + i * 10,
           3,
@@ -1671,7 +1692,7 @@ describe("AnalyticsAggregator", () => {
       // Rename the category
       db.prepare("UPDATE categories SET name = ? WHERE id = ?").run(
         "Engineering",
-        devCategory.id,
+        devCategoryId,
       );
 
       // After rename, analytics should return the new name "Engineering"
@@ -1692,12 +1713,8 @@ describe("AnalyticsAggregator", () => {
     });
 
     it("should group mostDelayedCategory by category_id and return display name", () => {
-      const writingCat = db
-        .prepare("SELECT id FROM categories WHERE name = ?")
-        .get("Writing") as { id: number };
-      const devCat = db
-        .prepare("SELECT id FROM categories WHERE name = ?")
-        .get("Development") as { id: number };
+      const writingCatId = ensureCategory(db, "Writing");
+      const devCatId = ensureCategory(db, "Development");
 
       ensureUser(db, "user-1");
 
@@ -1713,7 +1730,7 @@ describe("AnalyticsAggregator", () => {
           `writing task ${i}`,
           "blog post",
           "Writing",
-          writingCat.id,
+          writingCatId,
           60,
           100,
           3,
@@ -1733,7 +1750,7 @@ describe("AnalyticsAggregator", () => {
           `dev task ${i}`,
           "coding",
           "Development",
-          devCat.id,
+          devCatId,
           60,
           65,
           3,
@@ -1752,9 +1769,7 @@ describe("AnalyticsAggregator", () => {
     });
 
     it("should group recent changes by category_id and return display names", () => {
-      const devCat = db
-        .prepare("SELECT id FROM categories WHERE name = ?")
-        .get("Development") as { id: number };
+      const devCatId = ensureCategory(db, "Development");
 
       ensureUser(db, "user-1");
 
@@ -1772,7 +1787,7 @@ describe("AnalyticsAggregator", () => {
           `old dev task ${i}`,
           "coding",
           "Development",
-          devCat.id,
+          devCatId,
           60,
           100,
           3,
@@ -1792,7 +1807,7 @@ describe("AnalyticsAggregator", () => {
           `new dev task ${i}`,
           "programming",
           "Development",
-          devCat.id,
+          devCatId,
           60,
           60,
           3,
@@ -1808,6 +1823,669 @@ describe("AnalyticsAggregator", () => {
       );
       expect(devFaster).toBeDefined();
       expect(devFaster!.percentageChange).toBeLessThan(0);
+    });
+  });
+
+  // =========================================================================
+  // Category Integration: Merge Rollup, Rename Resolution, Active-Only
+  // Filtering (Task 10.4)
+  // Validates: Requirements 13.1, 13.2, 13.3, 13.4
+  // =========================================================================
+
+  describe("Category integration — merge rollup, rename, active-only filtering", () => {
+    /**
+     * Helper to create a category directly in the DB for a user.
+     * Returns the category id.
+     */
+    function createCategory(
+      database: Database.Database,
+      name: string,
+      userId: string = "user-1",
+      status: "active" | "merged" | "archived" = "active",
+    ): number {
+      ensureUser(database, userId);
+      const result = database
+        .prepare(
+          "INSERT INTO categories (name, user_id, status, created_by) VALUES (?, ?, ?, 'system')",
+        )
+        .run(name, userId, status);
+      return Number(result.lastInsertRowid);
+    }
+
+    /**
+     * Helper to insert a completion record with explicit category_id.
+     */
+    function insertCompletionWithCategoryId(
+      database: Database.Database,
+      opts: {
+        userId?: string;
+        description?: string;
+        categoryName: string;
+        categoryId: number;
+        estimatedTime?: number;
+        actualTime?: number;
+        difficultyLevel?: number;
+        completedAt?: string;
+      },
+    ): void {
+      const userId = opts.userId ?? "user-1";
+      ensureUser(database, userId);
+      database
+        .prepare(
+          `INSERT INTO completion_history
+             (id, user_id, task_description, category, normalized_category, category_id,
+              estimated_time, actual_time, difficulty_level, completed_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          uuidv4(),
+          userId,
+          opts.description ?? "task",
+          opts.categoryName,
+          opts.categoryName,
+          opts.categoryId,
+          opts.estimatedTime ?? 60,
+          opts.actualTime ?? 45,
+          opts.difficultyLevel ?? 3,
+          opts.completedAt ?? "2025-01-15T10:00:00Z",
+        );
+    }
+
+    // --- Merge rollup (Req 13.2) ---
+
+    describe("Merge rollup", () => {
+      it("should roll up source category data under target after merge", () => {
+        const sourceCatId = createCategory(db, "Coding");
+        const targetCatId = createCategory(db, "Development");
+
+        // Insert completions under source
+        for (let i = 0; i < 3; i++) {
+          insertCompletionWithCategoryId(db, {
+            categoryName: "Coding",
+            categoryId: sourceCatId,
+            estimatedTime: 60,
+            actualTime: 80,
+            completedAt: `2025-01-${15 + i}T10:00:00Z`,
+          });
+        }
+
+        // Insert completions under target
+        for (let i = 0; i < 2; i++) {
+          insertCompletionWithCategoryId(db, {
+            categoryName: "Development",
+            categoryId: targetCatId,
+            estimatedTime: 60,
+            actualTime: 50,
+            completedAt: `2025-01-${18 + i}T10:00:00Z`,
+          });
+        }
+
+        // Perform merge: source → target
+        db.prepare(
+          `UPDATE categories SET status = 'merged', merged_into_category_id = ? WHERE id = ?`,
+        ).run(targetCatId, sourceCatId);
+        db.prepare(
+          `UPDATE completion_history SET category_id = ? WHERE category_id = ?`,
+        ).run(targetCatId, sourceCatId);
+
+        const summary = aggregator.getSummary(
+          "user-1",
+          "2025-01-01",
+          "2025-01-31",
+        );
+
+        // Target should have all 5 completions
+        const targetStat = summary.categoryPerformance!.stats.find(
+          (s) => s.category === "Development",
+        );
+        expect(targetStat).toBeDefined();
+        expect(targetStat!.sampleSize).toBe(5);
+
+        // Source should NOT appear as a separate entry
+        const sourceStat = summary.categoryPerformance!.stats.find(
+          (s) => s.category === "Coding",
+        );
+        expect(sourceStat).toBeUndefined();
+      });
+
+      it("should show merged source data under target when completion_history is updated", () => {
+        const sourceCatId = createCategory(db, "Programming");
+        const targetCatId = createCategory(db, "Engineering");
+
+        // Insert completions under source category_id
+        insertCompletionWithCategoryId(db, {
+          categoryName: "Programming",
+          categoryId: sourceCatId,
+          estimatedTime: 60,
+          actualTime: 70,
+          completedAt: "2025-01-15T10:00:00Z",
+        });
+
+        // Insert completions under target category_id
+        insertCompletionWithCategoryId(db, {
+          categoryName: "Engineering",
+          categoryId: targetCatId,
+          estimatedTime: 60,
+          actualTime: 50,
+          completedAt: "2025-01-16T10:00:00Z",
+        });
+
+        // Perform full merge: mark source as merged AND update completion_history
+        db.prepare(
+          `UPDATE categories SET status = 'merged', merged_into_category_id = ? WHERE id = ?`,
+        ).run(targetCatId, sourceCatId);
+        db.prepare(
+          `UPDATE completion_history SET category_id = ? WHERE category_id = ?`,
+        ).run(targetCatId, sourceCatId);
+
+        const summary = aggregator.getSummary(
+          "user-1",
+          "2025-01-01",
+          "2025-01-31",
+        );
+
+        // Target should have both completions rolled up
+        const targetStat = summary.categoryPerformance!.stats.find(
+          (s) => s.category === "Engineering",
+        );
+        expect(targetStat).toBeDefined();
+        expect(targetStat!.sampleSize).toBe(2);
+        // avg actual: (70+50)/2 = 60
+        expect(targetStat!.avgActualTime).toBeCloseTo(60, 4);
+
+        // Source should NOT appear
+        const sourceStat = summary.categoryPerformance!.stats.find(
+          (s) => s.category === "Programming",
+        );
+        expect(sourceStat).toBeUndefined();
+      });
+
+      it("should roll up merged category data in performanceCategories", () => {
+        const sourceCatId = createCategory(db, "Scripting");
+        const targetCatId = createCategory(db, "Automation");
+
+        // Source: actual > estimated → would be "area-for-improvement"
+        insertCompletionWithCategoryId(db, {
+          categoryName: "Scripting",
+          categoryId: sourceCatId,
+          estimatedTime: 60,
+          actualTime: 90,
+          completedAt: "2025-01-15T10:00:00Z",
+        });
+
+        // Target: actual < estimated → would be "strength"
+        insertCompletionWithCategoryId(db, {
+          categoryName: "Automation",
+          categoryId: targetCatId,
+          estimatedTime: 60,
+          actualTime: 40,
+          completedAt: "2025-01-16T10:00:00Z",
+        });
+
+        // Merge source into target (update both status and completion_history)
+        db.prepare(
+          `UPDATE categories SET status = 'merged', merged_into_category_id = ? WHERE id = ?`,
+        ).run(targetCatId, sourceCatId);
+        db.prepare(
+          `UPDATE completion_history SET category_id = ? WHERE category_id = ?`,
+        ).run(targetCatId, sourceCatId);
+
+        const summary = aggregator.getSummary(
+          "user-1",
+          "2025-01-01",
+          "2025-01-31",
+        );
+
+        // performanceCategories should show only "Automation" with combined data
+        const perfCats = summary.performanceCategories;
+        expect(perfCats.map((p) => p.category)).not.toContain("Scripting");
+
+        const automationPerf = perfCats.find(
+          (p) => p.category === "Automation",
+        );
+        expect(automationPerf).toBeDefined();
+        // avg actual: (90+40)/2 = 65, avg estimated: (60+60)/2 = 60
+        expect(automationPerf!.avgActualTime).toBeCloseTo(65, 4);
+        expect(automationPerf!.avgEstimatedTime).toBeCloseTo(60, 4);
+      });
+
+      it("should roll up merged category data in mostDelayedCategory", () => {
+        const sourceCatId = createCategory(db, "Blogging");
+        const targetCatId = createCategory(db, "Content");
+        const otherCatId = createCategory(db, "Admin");
+
+        // Source: high overrun
+        for (let i = 0; i < 3; i++) {
+          insertCompletionWithCategoryId(db, {
+            categoryName: "Blogging",
+            categoryId: sourceCatId,
+            estimatedTime: 60,
+            actualTime: 120,
+            completedAt: `2025-01-${15 + i}T10:00:00Z`,
+          });
+        }
+
+        // Target: moderate overrun
+        for (let i = 0; i < 2; i++) {
+          insertCompletionWithCategoryId(db, {
+            categoryName: "Content",
+            categoryId: targetCatId,
+            estimatedTime: 60,
+            actualTime: 80,
+            completedAt: `2025-01-${18 + i}T10:00:00Z`,
+          });
+        }
+
+        // Other: no overrun
+        for (let i = 0; i < 3; i++) {
+          insertCompletionWithCategoryId(db, {
+            categoryName: "Admin",
+            categoryId: otherCatId,
+            estimatedTime: 60,
+            actualTime: 50,
+            completedAt: `2025-01-${15 + i}T11:00:00Z`,
+          });
+        }
+
+        // Merge Blogging → Content (without updating completion_history)
+        db.prepare(
+          `UPDATE categories SET status = 'merged', merged_into_category_id = ? WHERE id = ?`,
+        ).run(targetCatId, sourceCatId);
+
+        const summary = aggregator.getSummary(
+          "user-1",
+          "2025-01-01",
+          "2025-01-31",
+        );
+
+        // mostDelayedCategory should be "Content" (rolled up from Blogging + Content)
+        expect(summary.kpis!.mostDelayedCategory).toBe("Content");
+      });
+    });
+
+    // --- Rename resolution (Req 13.1) ---
+
+    describe("Rename resolution", () => {
+      it("should use the new name in categoryPerformance after rename", () => {
+        const catId = createCategory(db, "Dev Work");
+
+        for (let i = 0; i < 3; i++) {
+          insertCompletionWithCategoryId(db, {
+            categoryName: "Dev Work",
+            categoryId: catId,
+            estimatedTime: 60,
+            actualTime: 50 + i * 10,
+            completedAt: `2025-01-${15 + i}T10:00:00Z`,
+          });
+        }
+
+        // Rename the category
+        db.prepare("UPDATE categories SET name = ? WHERE id = ?").run(
+          "Software Engineering",
+          catId,
+        );
+
+        const summary = aggregator.getSummary(
+          "user-1",
+          "2025-01-01",
+          "2025-01-31",
+        );
+
+        // New name should appear
+        const newNameStat = summary.categoryPerformance!.stats.find(
+          (s) => s.category === "Software Engineering",
+        );
+        expect(newNameStat).toBeDefined();
+        expect(newNameStat!.sampleSize).toBe(3);
+
+        // Old name should NOT appear
+        const oldNameStat = summary.categoryPerformance!.stats.find(
+          (s) => s.category === "Dev Work",
+        );
+        expect(oldNameStat).toBeUndefined();
+      });
+
+      it("should use the new name in performanceCategories after rename", () => {
+        const catId = createCategory(db, "Meetings");
+
+        insertCompletionWithCategoryId(db, {
+          categoryName: "Meetings",
+          categoryId: catId,
+          estimatedTime: 30,
+          actualTime: 45,
+          completedAt: "2025-01-15T10:00:00Z",
+        });
+
+        // Rename
+        db.prepare("UPDATE categories SET name = ? WHERE id = ?").run(
+          "Communication",
+          catId,
+        );
+
+        const summary = aggregator.getSummary(
+          "user-1",
+          "2025-01-01",
+          "2025-01-31",
+        );
+
+        const perfCats = summary.performanceCategories;
+        expect(perfCats.map((p) => p.category)).toContain("Communication");
+        expect(perfCats.map((p) => p.category)).not.toContain("Meetings");
+      });
+
+      it("should use the new name in recentChanges after rename", () => {
+        const catId = createCategory(db, "Coding Tasks");
+        const endDate = "2025-02-15";
+
+        // Preceding 4 weeks: slower
+        for (let i = 0; i < 4; i++) {
+          insertCompletionWithCategoryId(db, {
+            categoryName: "Coding Tasks",
+            categoryId: catId,
+            estimatedTime: 60,
+            actualTime: 100,
+            completedAt: dateOffset("2025-01-10T10:00:00Z", i * 7),
+          });
+        }
+
+        // Last 2 weeks: faster
+        for (let i = 0; i < 3; i++) {
+          insertCompletionWithCategoryId(db, {
+            categoryName: "Coding Tasks",
+            categoryId: catId,
+            estimatedTime: 60,
+            actualTime: 55,
+            completedAt: dateOffset("2025-02-03T10:00:00Z", i * 3),
+          });
+        }
+
+        // Rename
+        db.prepare("UPDATE categories SET name = ? WHERE id = ?").run(
+          "Backend Dev",
+          catId,
+        );
+
+        const summary = aggregator.getSummary("user-1", "2025-01-01", endDate);
+
+        // Recent changes should use the new name
+        const fasterCats = summary.recentChanges!.fasterCategories.map(
+          (c) => c.category,
+        );
+        expect(fasterCats).toContain("Backend Dev");
+        expect(fasterCats).not.toContain("Coding Tasks");
+      });
+    });
+
+    // --- Active-only filtering (Req 13.3) ---
+
+    describe("Active-only filtering", () => {
+      it("should exclude archived categories from categoryPerformance", () => {
+        const activeCatId = createCategory(db, "Active Category");
+        const archivedCatId = createCategory(db, "Archived Category");
+
+        // Insert completions for both
+        for (let i = 0; i < 3; i++) {
+          insertCompletionWithCategoryId(db, {
+            categoryName: "Active Category",
+            categoryId: activeCatId,
+            estimatedTime: 60,
+            actualTime: 50,
+            completedAt: `2025-01-${15 + i}T10:00:00Z`,
+          });
+          insertCompletionWithCategoryId(db, {
+            categoryName: "Archived Category",
+            categoryId: archivedCatId,
+            estimatedTime: 60,
+            actualTime: 80,
+            completedAt: `2025-01-${15 + i}T11:00:00Z`,
+          });
+        }
+
+        // Archive one category
+        db.prepare(
+          "UPDATE categories SET status = 'archived' WHERE id = ?",
+        ).run(archivedCatId);
+
+        const summary = aggregator.getSummary(
+          "user-1",
+          "2025-01-01",
+          "2025-01-31",
+        );
+
+        const catNames = summary.categoryPerformance!.stats.map(
+          (s) => s.category,
+        );
+        expect(catNames).toContain("Active Category");
+        expect(catNames).not.toContain("Archived Category");
+      });
+
+      it("should exclude archived categories from performanceCategories", () => {
+        const activeCatId = createCategory(db, "Writing");
+        const archivedCatId = createCategory(db, "Old Writing");
+
+        insertCompletionWithCategoryId(db, {
+          categoryName: "Writing",
+          categoryId: activeCatId,
+          estimatedTime: 60,
+          actualTime: 50,
+          completedAt: "2025-01-15T10:00:00Z",
+        });
+        insertCompletionWithCategoryId(db, {
+          categoryName: "Old Writing",
+          categoryId: archivedCatId,
+          estimatedTime: 60,
+          actualTime: 90,
+          completedAt: "2025-01-16T10:00:00Z",
+        });
+
+        // Archive
+        db.prepare(
+          "UPDATE categories SET status = 'archived' WHERE id = ?",
+        ).run(archivedCatId);
+
+        const summary = aggregator.getSummary(
+          "user-1",
+          "2025-01-01",
+          "2025-01-31",
+        );
+
+        const perfCatNames = summary.performanceCategories.map(
+          (p) => p.category,
+        );
+        expect(perfCatNames).toContain("Writing");
+        expect(perfCatNames).not.toContain("Old Writing");
+      });
+
+      it("should exclude archived categories from mostDelayedCategory", () => {
+        const activeCatId = createCategory(db, "Design");
+        const archivedCatId = createCategory(db, "Old Design");
+
+        // Archived category has higher overrun
+        for (let i = 0; i < 3; i++) {
+          insertCompletionWithCategoryId(db, {
+            categoryName: "Old Design",
+            categoryId: archivedCatId,
+            estimatedTime: 60,
+            actualTime: 120,
+            completedAt: `2025-01-${15 + i}T10:00:00Z`,
+          });
+        }
+
+        // Active category has lower overrun
+        for (let i = 0; i < 3; i++) {
+          insertCompletionWithCategoryId(db, {
+            categoryName: "Design",
+            categoryId: activeCatId,
+            estimatedTime: 60,
+            actualTime: 75,
+            completedAt: `2025-01-${15 + i}T11:00:00Z`,
+          });
+        }
+
+        // Archive the high-overrun category
+        db.prepare(
+          "UPDATE categories SET status = 'archived' WHERE id = ?",
+        ).run(archivedCatId);
+
+        const summary = aggregator.getSummary(
+          "user-1",
+          "2025-01-01",
+          "2025-01-31",
+        );
+
+        // mostDelayedCategory should be "Design" (the active one), not "Old Design"
+        expect(summary.kpis!.mostDelayedCategory).toBe("Design");
+      });
+
+      it("should exclude archived categories from recentChanges", () => {
+        const activeCatId = createCategory(db, "Research");
+        const archivedCatId = createCategory(db, "Old Research");
+        const endDate = "2025-02-15";
+
+        // Preceding 4 weeks for both
+        for (let i = 0; i < 4; i++) {
+          insertCompletionWithCategoryId(db, {
+            categoryName: "Research",
+            categoryId: activeCatId,
+            estimatedTime: 60,
+            actualTime: 100,
+            completedAt: dateOffset("2025-01-10T10:00:00Z", i * 7),
+          });
+          insertCompletionWithCategoryId(db, {
+            categoryName: "Old Research",
+            categoryId: archivedCatId,
+            estimatedTime: 60,
+            actualTime: 100,
+            completedAt: dateOffset("2025-01-10T10:00:00Z", i * 7),
+          });
+        }
+
+        // Last 2 weeks for both (faster)
+        for (let i = 0; i < 3; i++) {
+          insertCompletionWithCategoryId(db, {
+            categoryName: "Research",
+            categoryId: activeCatId,
+            estimatedTime: 60,
+            actualTime: 55,
+            completedAt: dateOffset("2025-02-03T10:00:00Z", i * 3),
+          });
+          insertCompletionWithCategoryId(db, {
+            categoryName: "Old Research",
+            categoryId: archivedCatId,
+            estimatedTime: 60,
+            actualTime: 55,
+            completedAt: dateOffset("2025-02-03T10:00:00Z", i * 3),
+          });
+        }
+
+        // Archive
+        db.prepare(
+          "UPDATE categories SET status = 'archived' WHERE id = ?",
+        ).run(archivedCatId);
+
+        const summary = aggregator.getSummary("user-1", "2025-01-01", endDate);
+
+        const allChangeCats = [
+          ...summary.recentChanges!.fasterCategories.map((c) => c.category),
+          ...summary.recentChanges!.slowerCategories.map((c) => c.category),
+        ];
+        expect(allChangeCats).not.toContain("Old Research");
+      });
+
+      it("should exclude archived categories from limitedDataCategories", () => {
+        const archivedCatId = createCategory(db, "Deprecated");
+        const endDate = "2025-02-15";
+
+        // Only 1 task for the archived category (would be limited data if active)
+        insertCompletionWithCategoryId(db, {
+          categoryName: "Deprecated",
+          categoryId: archivedCatId,
+          estimatedTime: 60,
+          actualTime: 50,
+          completedAt: "2025-02-10T10:00:00Z",
+        });
+
+        // Archive it
+        db.prepare(
+          "UPDATE categories SET status = 'archived' WHERE id = ?",
+        ).run(archivedCatId);
+
+        const summary = aggregator.getSummary("user-1", "2025-01-01", endDate);
+
+        expect(summary.recentChanges!.limitedDataCategories).not.toContain(
+          "Deprecated",
+        );
+      });
+    });
+
+    // --- Category performance uses current name from categories table (Req 13.1, 13.4) ---
+
+    describe("Category name from categories table", () => {
+      it("should use category table name, not raw text from completion_history", () => {
+        const catId = createCategory(db, "Software Dev");
+
+        // Insert with different raw category text
+        db.prepare(
+          `INSERT INTO completion_history
+             (id, user_id, task_description, category, normalized_category, category_id,
+              estimated_time, actual_time, difficulty_level, completed_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          uuidv4(),
+          "user-1",
+          "write code",
+          "coding stuff",
+          "some_normalized",
+          catId,
+          60,
+          50,
+          3,
+          "2025-01-15T10:00:00Z",
+        );
+
+        const summary = aggregator.getSummary(
+          "user-1",
+          "2025-01-01",
+          "2025-01-31",
+        );
+
+        // Should use the name from the categories table
+        const stat = summary.categoryPerformance!.stats.find(
+          (s) => s.category === "Software Dev",
+        );
+        expect(stat).toBeDefined();
+
+        // Raw text should NOT appear
+        const rawStat = summary.categoryPerformance!.stats.find(
+          (s) =>
+            s.category === "coding stuff" || s.category === "some_normalized",
+        );
+        expect(rawStat).toBeUndefined();
+      });
+
+      it("should use category table name in performanceCategories label", () => {
+        const catId = createCategory(db, "Creative Work");
+
+        insertCompletionWithCategoryId(db, {
+          categoryName: "creative",
+          categoryId: catId,
+          estimatedTime: 60,
+          actualTime: 90,
+          completedAt: "2025-01-15T10:00:00Z",
+        });
+
+        const summary = aggregator.getSummary(
+          "user-1",
+          "2025-01-01",
+          "2025-01-31",
+        );
+
+        const perfCat = summary.performanceCategories.find(
+          (p) => p.category === "Creative Work",
+        );
+        expect(perfCat).toBeDefined();
+        expect(perfCat!.label).toBe("area-for-improvement");
+      });
     });
   });
 });

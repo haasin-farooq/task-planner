@@ -519,6 +519,8 @@ describe("TaskAnalyzer", () => {
     beforeEach(() => {
       db = new Database(":memory:");
       runMigrations(db);
+      // Insert test user so per-user category operations work
+      db.prepare("INSERT OR IGNORE INTO users (id) VALUES ('user-1')").run();
       categoryRepo = new CategoryRepository(db);
     });
 
@@ -530,10 +532,16 @@ describe("TaskAnalyzer", () => {
      * Build a mock AICategoryAssigner that returns a controlled category
      * for each call. Tracks calls for verification.
      */
-    function createMockCategoryAssigner(categoryName: string, isNew = false) {
+    function createMockCategoryAssigner(
+      categoryName: string,
+      isNew = false,
+      confidence = 0.9,
+      source: "llm" | "fallback" = "llm",
+    ) {
       const assignCalls: Array<{
         description: string;
         existingCategories: string[];
+        activeCategoryCount?: number;
       }> = [];
 
       const assigner = {
@@ -543,12 +551,21 @@ describe("TaskAnalyzer", () => {
             async (
               description: string,
               existingCategories: string[],
+              activeCategoryCount?: number,
             ): Promise<CategoryAssignmentResult> => {
-              assignCalls.push({ description, existingCategories });
+              assignCalls.push({
+                description,
+                existingCategories,
+                activeCategoryCount,
+              });
               return {
                 rawLLMCategory: categoryName,
                 finalCategory: categoryName,
                 isNew,
+                confidence,
+                source,
+                closestExisting: null,
+                lowConfidence: false,
               };
             },
           ),
@@ -557,7 +574,7 @@ describe("TaskAnalyzer", () => {
       return { assigner, assignCalls };
     }
 
-    it("includes category and categoryId on each analyzed task (Req 5.3, 5.4)", async () => {
+    it("includes category, categoryId, and categoryConfidence on each analyzed task (Req 16.4)", async () => {
       const { client } = createMockClient({
         content: llmJson([
           {
@@ -601,10 +618,11 @@ describe("TaskAnalyzer", () => {
         expect(t.category).toBe("Development");
         expect(typeof t.categoryId).toBe("number");
         expect(t.categoryId).toBeGreaterThan(0);
+        expect(t.categoryConfidence).toBe(0.9);
       }
     });
 
-    it("calls AICategoryAssigner.assign() for each task description (Req 5.1)", async () => {
+    it("calls AICategoryAssigner.assign() for each task description (Req 16.2)", async () => {
       const { client } = createMockClient({
         content: llmJson([
           {
@@ -649,7 +667,7 @@ describe("TaskAnalyzer", () => {
       expect(assignCalls[1].description).toBe("Write documentation");
     });
 
-    it("passes current category names from CategoryRepository to AICategoryAssigner (Req 5.2)", async () => {
+    it("passes per-user active category names from CategoryRepository to AICategoryAssigner (Req 16.1, 16.2)", async () => {
       const { client } = createMockClient({
         content: llmJson([
           {
@@ -675,15 +693,17 @@ describe("TaskAnalyzer", () => {
         categoryRepo,
       );
 
-      // The seeded categories from runMigrations should be passed
-      const seededNames = categoryRepo.getAllNames();
+      // Per-user active categories should be passed (not global getAllNames)
+      const activeNames = categoryRepo.getActiveNamesByUserId("user-1");
+      const activeCount = categoryRepo.countActiveByUserId("user-1");
 
       await analyzer.analyze([task("t1", "Fix the login bug")], "user-1");
 
-      expect(assignCalls[0].existingCategories).toEqual(seededNames);
+      expect(assignCalls[0].existingCategories).toEqual(activeNames);
+      expect(assignCalls[0].activeCategoryCount).toBe(activeCount);
     });
 
-    it("resolves category via CategoryRepository.upsertByName() and assigns matching categoryId", async () => {
+    it("resolves category via CategoryRepository.create() with per-user scoping and assigns matching categoryId (Req 16.3)", async () => {
       const { client } = createMockClient({
         content: llmJson([
           {
@@ -713,14 +733,15 @@ describe("TaskAnalyzer", () => {
         "user-1",
       );
 
-      // The categoryId should match the ID in the categories table
-      const entity = categoryRepo.findByName("Development");
+      // The categoryId should match the ID in the categories table for user-1
+      const entity = categoryRepo.findByNameAndUserId("Development", "user-1");
       expect(entity).not.toBeNull();
       expect(result.tasks[0].categoryId).toBe(entity!.id);
       expect(result.tasks[0].category).toBe(entity!.name);
+      expect(entity!.userId).toBe("user-1");
     });
 
-    it("creates a new category in the table when AICategoryAssigner returns a new category name", async () => {
+    it("creates a new category in the table when AICategoryAssigner returns a new category name (Req 16.3)", async () => {
       const { client } = createMockClient({
         content: llmJson([
           {
@@ -735,7 +756,7 @@ describe("TaskAnalyzer", () => {
       });
 
       const engine = createMockLearningEngine();
-      // Return a category name that doesn't exist in the seeded data
+      // Return a category name that doesn't exist yet
       const { assigner } = createMockCategoryAssigner("Data Entry", true);
 
       const analyzer = new TaskAnalyzer(
@@ -754,10 +775,12 @@ describe("TaskAnalyzer", () => {
       expect(result.tasks[0].category).toBe("Data Entry");
       expect(result.tasks[0].categoryId).toBeGreaterThan(0);
 
-      // Verify the new category was persisted in the table
-      const entity = categoryRepo.findByName("Data Entry");
+      // Verify the new category was persisted for user-1
+      const entity = categoryRepo.findByNameAndUserId("Data Entry", "user-1");
       expect(entity).not.toBeNull();
       expect(entity!.id).toBe(result.tasks[0].categoryId);
+      expect(entity!.userId).toBe("user-1");
+      expect(entity!.createdBy).toBe("llm");
     });
 
     it("assigns different categories to different tasks when assigner returns varying results", async () => {
@@ -794,6 +817,10 @@ describe("TaskAnalyzer", () => {
             rawLLMCategory: cat,
             finalCategory: cat,
             isNew: false,
+            confidence: 0.9,
+            source: "llm",
+            closestExisting: null,
+            lowConfidence: false,
           };
         }),
       } as unknown as AICategoryAssigner;
@@ -816,6 +843,192 @@ describe("TaskAnalyzer", () => {
 
       // Both should have valid but different categoryIds
       expect(result.tasks[0].categoryId).not.toBe(result.tasks[1].categoryId);
+    });
+
+    it("creates category with createdBy='fallback' when assigner source is 'fallback' (Req 16.3)", async () => {
+      const { client } = createMockClient({
+        content: llmJson([
+          {
+            id: "t1",
+            priority: 3,
+            effortPercentage: 100,
+            difficultyLevel: 2,
+            estimatedTime: 30,
+            dependsOn: [],
+          },
+        ]),
+      });
+
+      const engine = createMockLearningEngine();
+      // Simulate fallback: source='fallback', confidence=0.0
+      const { assigner } = createMockCategoryAssigner(
+        "Admin",
+        false,
+        0.0,
+        "fallback",
+      );
+
+      const analyzer = new TaskAnalyzer(
+        engine,
+        client,
+        "gpt-4o-mini",
+        assigner,
+        categoryRepo,
+      );
+
+      const result = await analyzer.analyze(
+        [task("t1", "Organize files on desktop")],
+        "user-1",
+      );
+
+      expect(result.tasks[0].category).toBe("Admin");
+      expect(result.tasks[0].categoryConfidence).toBe(0.0);
+
+      // Verify the category was persisted with createdBy='fallback'
+      const entity = categoryRepo.findByNameAndUserId("Admin", "user-1");
+      expect(entity).not.toBeNull();
+      expect(entity!.createdBy).toBe("fallback");
+    });
+
+    it("fetches per-user categories via getActiveNamesByUserId, not getAllNames (Req 16.1)", async () => {
+      const { client } = createMockClient({
+        content: llmJson([
+          {
+            id: "t1",
+            priority: 3,
+            effortPercentage: 100,
+            difficultyLevel: 2,
+            estimatedTime: 30,
+            dependsOn: [],
+          },
+        ]),
+      });
+
+      const engine = createMockLearningEngine();
+      const { assigner } = createMockCategoryAssigner("Development");
+
+      // Spy on the repository methods
+      const getActiveNamesSpy = vi.spyOn(
+        categoryRepo,
+        "getActiveNamesByUserId",
+      );
+      const getAllNamesSpy = vi.spyOn(categoryRepo, "getAllNames");
+
+      const analyzer = new TaskAnalyzer(
+        engine,
+        client,
+        "gpt-4o-mini",
+        assigner,
+        categoryRepo,
+      );
+
+      await analyzer.analyze([task("t1", "Fix the login bug")], "user-1");
+
+      // Must use per-user method
+      expect(getActiveNamesSpy).toHaveBeenCalledWith("user-1");
+      // Must NOT use global method
+      expect(getAllNamesSpy).not.toHaveBeenCalled();
+    });
+
+    it("passes correct activeCategoryCount when user has pre-existing categories (Req 16.2)", async () => {
+      // Pre-create some categories for user-1
+      categoryRepo.create("Development", "user-1", "llm");
+      categoryRepo.create("Testing", "user-1", "llm");
+      categoryRepo.create("Research", "user-1", "user");
+
+      const { client } = createMockClient({
+        content: llmJson([
+          {
+            id: "t1",
+            priority: 3,
+            effortPercentage: 100,
+            difficultyLevel: 2,
+            estimatedTime: 30,
+            dependsOn: [],
+          },
+        ]),
+      });
+
+      const engine = createMockLearningEngine();
+      const { assigner, assignCalls } =
+        createMockCategoryAssigner("Development");
+
+      const analyzer = new TaskAnalyzer(
+        engine,
+        client,
+        "gpt-4o-mini",
+        assigner,
+        categoryRepo,
+      );
+
+      await analyzer.analyze([task("t1", "Fix the login bug")], "user-1");
+
+      // Should pass the 3 pre-existing active category names
+      expect(assignCalls[0].existingCategories).toEqual(
+        expect.arrayContaining(["Development", "Testing", "Research"]),
+      );
+      expect(assignCalls[0].existingCategories).toHaveLength(3);
+      // activeCategoryCount should be 3
+      expect(assignCalls[0].activeCategoryCount).toBe(3);
+    });
+
+    it("propagates varying confidence values to AnalyzedTask (Req 16.4)", async () => {
+      const { client } = createMockClient({
+        content: llmJson([
+          {
+            id: "t1",
+            priority: 3,
+            effortPercentage: 50,
+            difficultyLevel: 2,
+            estimatedTime: 30,
+            dependsOn: [],
+          },
+          {
+            id: "t2",
+            priority: 4,
+            effortPercentage: 50,
+            difficultyLevel: 3,
+            estimatedTime: 45,
+            dependsOn: [],
+          },
+        ]),
+      });
+
+      const engine = createMockLearningEngine();
+
+      // Return different confidence values for each call
+      let callCount = 0;
+      const assigner = {
+        assign: vi.fn().mockImplementation(async () => {
+          callCount++;
+          const isFirst = callCount === 1;
+          return {
+            rawLLMCategory: "Development",
+            finalCategory: "Development",
+            isNew: false,
+            confidence: isFirst ? 0.95 : 0.42,
+            source: isFirst ? "llm" : "fallback",
+            closestExisting: null,
+            lowConfidence: !isFirst,
+          };
+        }),
+      } as unknown as AICategoryAssigner;
+
+      const analyzer = new TaskAnalyzer(
+        engine,
+        client,
+        "gpt-4o-mini",
+        assigner,
+        categoryRepo,
+      );
+
+      const result = await analyzer.analyze(
+        [task("t1", "Fix the login bug"), task("t2", "Sort paperwork")],
+        "user-1",
+      );
+
+      expect(result.tasks[0].categoryConfidence).toBe(0.95);
+      expect(result.tasks[1].categoryConfidence).toBe(0.42);
     });
 
     it("does not assign categories when AICategoryAssigner is not provided", async () => {

@@ -220,19 +220,27 @@ export class TaskAnalyzer {
     // 6. Detect circular dependencies (Req 2.6)
     const circularDependencies = detectCycles(analyzedTasks);
 
-    // 7. Assign categories via AI when dependencies are available (Req 5.1, 5.2, 5.3, 5.4)
+    // 7. Assign categories via AI using per-user categories (Req 16.1, 16.2, 16.3, 16.4)
     if (this.categoryAssigner && this.categoryRepo) {
-      const categoryNames = this.categoryRepo.getAllNames();
+      const activeCategories = this.categoryRepo.getActiveNamesByUserId(userId);
+      const activeCategoryCount = this.categoryRepo.countActiveByUserId(userId);
+
       for (const analyzedTask of analyzedTasks) {
         const assignmentResult = await this.categoryAssigner.assign(
           analyzedTask.description,
-          categoryNames,
+          activeCategories,
+          activeCategoryCount,
         );
-        const categoryEntity = this.categoryRepo.upsertByName(
+
+        const categoryEntity = this.categoryRepo.create(
           assignmentResult.finalCategory,
+          userId,
+          assignmentResult.source === "llm" ? "llm" : "fallback",
         );
+
         analyzedTask.category = categoryEntity.name;
         analyzedTask.categoryId = categoryEntity.id;
+        analyzedTask.categoryConfidence = assignmentResult.confidence;
       }
     }
 
