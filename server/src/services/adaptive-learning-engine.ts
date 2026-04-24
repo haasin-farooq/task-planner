@@ -68,21 +68,22 @@ export class AdaptiveLearningEngine {
    * Behavioral adjustments are grouped by category_id (Req 17.2, 17.3).
    */
   recordCompletion(record: CompletionRecord): void {
-    const category = record.description;
-
     const run = this.db.transaction(() => {
       // Ensure the user row exists
       this.db
         .prepare("INSERT OR IGNORE INTO users (id) VALUES (?)")
         .run(record.userId);
 
-      // Resolve category_id via CategoryRepository when available (Req 17.1)
-      const normalizedCategory = normalize(category);
-      let categoryId: number | null = null;
-      let categoryName: string = normalizedCategory;
+      // Resolve category: use AI-assigned category when available,
+      // fall back to keyword normalizer only when no category was assigned
+      let categoryId: number | null = record.categoryId ?? null;
+      let categoryName: string;
 
-      if (this.categoryRepo) {
-        // Use per-user scoped create instead of legacy upsertByName (Req 17.1)
+      if (record.category && categoryId != null) {
+        // AI-assigned category is available — use it directly
+        categoryName = record.category;
+      } else if (record.category && this.categoryRepo) {
+        // Category name available but no ID — resolve via repo
         const createdBy =
           record.categorySource === "llm"
             ? "llm"
@@ -92,12 +93,34 @@ export class AdaptiveLearningEngine {
                 ? "fallback"
                 : "system";
         const categoryEntity = this.categoryRepo.create(
-          normalizedCategory,
+          record.category,
           record.userId,
           createdBy,
         );
         categoryId = categoryEntity.id;
         categoryName = categoryEntity.name;
+      } else {
+        // No AI-assigned category — fall back to keyword normalizer
+        const normalizedCategory = normalize(record.description);
+        categoryName = normalizedCategory;
+
+        if (this.categoryRepo) {
+          const createdBy =
+            record.categorySource === "llm"
+              ? "llm"
+              : record.categorySource === "user"
+                ? "user"
+                : record.categorySource === "fallback"
+                  ? "fallback"
+                  : "system";
+          const categoryEntity = this.categoryRepo.create(
+            normalizedCategory,
+            record.userId,
+            createdBy,
+          );
+          categoryId = categoryEntity.id;
+          categoryName = categoryEntity.name;
+        }
       }
 
       // Extract category metadata from the record (Req 9.5)
@@ -119,7 +142,7 @@ export class AdaptiveLearningEngine {
             uuidv4(),
             record.userId,
             record.description,
-            category,
+            record.description,
             categoryName,
             categoryId,
             rawLLMCategory,
@@ -143,8 +166,8 @@ export class AdaptiveLearningEngine {
             uuidv4(),
             record.userId,
             record.description,
-            category,
-            normalizedCategory,
+            record.description,
+            categoryName,
             rawLLMCategory,
             categoryConfidence,
             categorySource,
@@ -175,9 +198,9 @@ export class AdaptiveLearningEngine {
           .prepare(
             `SELECT actual_time, estimated_time
              FROM completion_history
-             WHERE user_id = ? AND category = ?`,
+             WHERE user_id = ? AND normalized_category = ?`,
           )
-          .all(record.userId, category) as {
+          .all(record.userId, categoryName) as {
           actual_time: number;
           estimated_time: number;
         }[];
@@ -233,7 +256,7 @@ export class AdaptiveLearningEngine {
           )
           .run(
             record.userId,
-            category,
+            categoryName,
             timeMultiplier,
             difficultyAdjustment,
             sampleSize,

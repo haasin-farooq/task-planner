@@ -99,6 +99,10 @@ export interface CompletionRecord {
   taskId: string;
   userId: string;
   description: string;
+  /** The AI-assigned category name (from task analysis). When provided, used directly instead of keyword normalization. */
+  category?: string | null;
+  /** The category_id foreign key (from task analysis). When provided, used directly for completion_history. */
+  categoryId?: number | null;
   /** minutes */
   estimatedTime: number;
   /** minutes */
@@ -297,4 +301,164 @@ export interface ExtendedAnalyticsSummary extends AnalyticsSummary {
     weeksOfData: number;
     daysOfData: number;
   };
+  timeAllocation?: TimeAllocationEntry[];
+  estimationErrors?: EstimationErrorStats;
+  dayOfWeekPatterns?: DayOfWeekPattern[];
+  speedInsights?: {
+    fastest: CategorySpeedInsight[];
+    slowest: CategorySpeedInsight[];
+    quickWins: CategorySpeedInsight[];
+    consistentOverruns: CategorySpeedInsight[];
+  };
+  aiLearningProgress?: CategoryLearningStatus[];
+  productivityConsistency?: ProductivityConsistency;
+  anomalies?: AnomalyEntry[];
+  periodComparison?: PeriodComparison;
+  recommendations?: Recommendation[];
+}
+
+// --- New analytics types ---
+
+/** Time allocation breakdown by category */
+export interface TimeAllocationEntry {
+  category: string;
+  totalActualTime: number;
+  totalEstimatedTime: number;
+  percentOfTotal: number; // 0-100
+  taskCount: number;
+}
+
+/** Estimation error details */
+export interface EstimationErrorStats {
+  avgErrorPercent: number; // average absolute error %
+  overestimationCount: number; // tasks where estimated > actual
+  underestimationCount: number; // tasks where estimated < actual
+  biggestOverruns: OverrunTask[]; // top 5 tasks that took longest vs estimate
+  biggestUnderruns: {
+    description: string;
+    estimatedTime: number;
+    actualTime: number;
+    savedMinutes: number;
+  }[];
+  errorByCategory: {
+    category: string;
+    avgErrorPercent: number;
+    sampleSize: number;
+  }[];
+}
+
+/** Day-of-week pattern entry */
+export interface DayOfWeekPattern {
+  dayName: string; // "Monday", "Tuesday", etc.
+  dayIndex: number; // 0=Sunday, 1=Monday, ..., 6=Saturday
+  tasksCompleted: number;
+  avgActualTime: number;
+  avgEstimatedTime: number;
+  estimationAccuracy: number; // 0-100
+}
+
+/** Category speed insight */
+export interface CategorySpeedInsight {
+  category: string;
+  avgActualTime: number;
+  avgEstimatedTime: number;
+  avgRatio: number; // actual/estimated ratio
+  sampleSize: number;
+}
+
+/** AI learning progress for a category */
+export interface CategoryLearningStatus {
+  category: string;
+  sampleSize: number;
+  maturity: "new" | "learning" | "ready"; // <3 = new, 3-9 = learning, 10+ = ready
+  hasPersonalization: boolean; // sampleSize >= 10
+  recentAccuracyTrend: "improving" | "stable" | "declining" | "insufficient";
+}
+
+/** Productivity consistency metrics */
+export interface ProductivityConsistency {
+  weeklyScores: {
+    weekStart: string;
+    tasksCompleted: number;
+    totalTime: number;
+  }[];
+  avgWeeklyTasks: number;
+  taskVariancePercent: number; // coefficient of variation
+  consistencyLabel:
+    | "very-consistent"
+    | "consistent"
+    | "variable"
+    | "highly-variable";
+}
+
+/** An anomalous task or category */
+export interface AnomalyEntry {
+  type: "slow-task" | "category-spike" | "unusual-duration";
+  description: string;
+  category: string;
+  actualTime: number;
+  expectedTime: number; // category average or estimated
+  deviationPercent: number;
+  completedAt: string;
+}
+
+/** Period comparison data */
+export interface PeriodComparison {
+  current: {
+    tasksCompleted: number;
+    totalActualTime: number;
+    avgActualTime: number;
+    estimationAccuracy: number;
+  };
+  previous: {
+    tasksCompleted: number;
+    totalActualTime: number;
+    avgActualTime: number;
+    estimationAccuracy: number;
+  };
+  deltas: {
+    tasksCompleted: number;
+    totalActualTime: number;
+    avgActualTime: number;
+    estimationAccuracy: number;
+  };
+  mostChangedCategory: { category: string; changePercent: number } | null;
+}
+
+/** Category drill-down detail */
+export interface CategoryDrillDown {
+  category: string;
+  totalTasks: number;
+  totalActualTime: number;
+  totalEstimatedTime: number;
+  avgActualTime: number;
+  avgEstimatedTime: number;
+  avgOverrun: number;
+  recentTasks: {
+    description: string;
+    estimatedTime: number;
+    actualTime: number;
+    completedAt: string;
+  }[];
+  weeklyTrend: {
+    weekStart: string;
+    avgActualTime: number;
+    avgEstimatedTime: number;
+    taskCount: number;
+  }[];
+  speedTrend: "improving" | "stable" | "declining" | "insufficient";
+}
+
+/** Actionable recommendation */
+export interface Recommendation {
+  id: string;
+  text: string;
+  type:
+    | "buffer"
+    | "improvement"
+    | "overestimation"
+    | "consistency"
+    | "learning";
+  category?: string;
+  priority: "high" | "medium" | "low";
 }

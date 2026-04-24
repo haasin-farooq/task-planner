@@ -14,15 +14,24 @@
 
 import type Database from "better-sqlite3";
 import type {
+  AnomalyEntry,
   BehavioralInsight,
   CategoryChange,
+  CategoryLearningStatus,
   CategoryPerformanceStat,
+  CategorySpeedInsight,
   DailyCompletionStat,
+  DayOfWeekPattern,
   DifficultyBreakdown,
   DifficultyCalibrationStat,
+  EstimationErrorStats,
   ExtendedAnalyticsSummary,
   OverrunTask,
+  PeriodComparison,
   PerformanceCategory,
+  ProductivityConsistency,
+  Recommendation,
+  TimeAllocationEntry,
   WeeklyTrendPoint,
 } from "../types/index.js";
 import {
@@ -246,6 +255,49 @@ export class AnalyticsAggregator {
     // Data status (Req 9.1–9.3)
     const dataStatus = this.computeDataStatus(userId);
 
+    // --- New analytics computations ---
+
+    // Time allocation
+    const timeAllocation = this.computeTimeAllocation(allRecords);
+
+    // Estimation errors
+    const estimationErrors = this.computeEstimationErrors(allRecords);
+
+    // Day-of-week patterns
+    const dayOfWeekPatterns = this.computeDayOfWeekPatterns(allRecords);
+
+    // Speed insights
+    const speedInsights = this.computeSpeedInsights(categoryPerformance);
+
+    // AI learning progress
+    const aiLearningProgress = this.computeAILearningProgress(
+      userId,
+      categoryPerformance,
+      weeklyByCategory,
+    );
+
+    // Productivity consistency
+    const productivityConsistency =
+      this.computeProductivityConsistency(weeklyTrends);
+
+    // Anomalies
+    const anomalies = this.computeAnomalies(allRecords);
+
+    // Period comparison
+    const periodComparison = this.computePeriodComparison(
+      userId,
+      startDate,
+      endDate,
+    );
+
+    // Recommendations
+    const recommendations = this.computeRecommendations(
+      categoryPerformance,
+      estimationErrors,
+      aiLearningProgress,
+      productivityConsistency,
+    );
+
     return {
       dailyStats,
       difficultyBreakdown,
@@ -260,6 +312,15 @@ export class AnalyticsAggregator {
       difficultyCalibration,
       recentChanges,
       dataStatus,
+      timeAllocation,
+      estimationErrors,
+      dayOfWeekPatterns,
+      speedInsights,
+      aiLearningProgress,
+      productivityConsistency,
+      anomalies,
+      periodComparison,
+      recommendations,
     };
   }
 
@@ -1146,6 +1207,529 @@ export class AnalyticsAggregator {
       weeksOfData,
       daysOfData,
     };
+  }
+
+  // -----------------------------------------------------------------------
+  // New analytics computation methods
+  // -----------------------------------------------------------------------
+
+  /**
+   * Compute time allocation breakdown by category.
+   */
+  private computeTimeAllocation(
+    records: CompletionRow[],
+  ): TimeAllocationEntry[] {
+    const catMap = new Map<
+      string,
+      { actual: number; estimated: number; count: number }
+    >();
+    let totalActual = 0;
+
+    for (const r of records) {
+      const cat = r.category_name ?? r.normalized_category ?? "Uncategorized";
+      const entry = catMap.get(cat) ?? { actual: 0, estimated: 0, count: 0 };
+      entry.actual += r.actual_time;
+      entry.estimated += r.estimated_time;
+      entry.count++;
+      catMap.set(cat, entry);
+      totalActual += r.actual_time;
+    }
+
+    const result: TimeAllocationEntry[] = [];
+    for (const [cat, data] of catMap) {
+      result.push({
+        category: cat,
+        totalActualTime: data.actual,
+        totalEstimatedTime: data.estimated,
+        percentOfTotal: totalActual > 0 ? (data.actual / totalActual) * 100 : 0,
+        taskCount: data.count,
+      });
+    }
+
+    return result.sort((a, b) => b.totalActualTime - a.totalActualTime);
+  }
+
+  /**
+   * Compute detailed estimation error statistics.
+   */
+  private computeEstimationErrors(
+    records: CompletionRow[],
+  ): EstimationErrorStats {
+    let totalErrorPercent = 0;
+    let errorCount = 0;
+    let overCount = 0;
+    let underCount = 0;
+    const overruns: {
+      description: string;
+      estimatedTime: number;
+      actualTime: number;
+      overrunMinutes: number;
+    }[] = [];
+    const underruns: {
+      description: string;
+      estimatedTime: number;
+      actualTime: number;
+      savedMinutes: number;
+    }[] = [];
+    const catErrors = new Map<string, { totalError: number; count: number }>();
+
+    for (const r of records) {
+      if (r.estimated_time <= 0) continue;
+      const errorPct =
+        (Math.abs(r.actual_time - r.estimated_time) / r.estimated_time) * 100;
+      totalErrorPercent += errorPct;
+      errorCount++;
+
+      if (r.estimated_time > r.actual_time) {
+        overCount++;
+        underruns.push({
+          description: r.task_description,
+          estimatedTime: r.estimated_time,
+          actualTime: r.actual_time,
+          savedMinutes: r.estimated_time - r.actual_time,
+        });
+      } else if (r.actual_time > r.estimated_time) {
+        underCount++;
+        overruns.push({
+          description: r.task_description,
+          estimatedTime: r.estimated_time,
+          actualTime: r.actual_time,
+          overrunMinutes: r.actual_time - r.estimated_time,
+        });
+      }
+
+      const cat = r.category_name ?? r.normalized_category ?? "Uncategorized";
+      const catEntry = catErrors.get(cat) ?? { totalError: 0, count: 0 };
+      catEntry.totalError += errorPct;
+      catEntry.count++;
+      catErrors.set(cat, catEntry);
+    }
+
+    overruns.sort((a, b) => b.overrunMinutes - a.overrunMinutes);
+    underruns.sort((a, b) => b.savedMinutes - a.savedMinutes);
+
+    return {
+      avgErrorPercent: errorCount > 0 ? totalErrorPercent / errorCount : 0,
+      overestimationCount: overCount,
+      underestimationCount: underCount,
+      biggestOverruns: overruns.slice(0, 5).map((o) => ({
+        description: o.description,
+        estimatedTime: o.estimatedTime,
+        actualTime: o.actualTime,
+        overrunMinutes: o.overrunMinutes,
+      })),
+      biggestUnderruns: underruns.slice(0, 5),
+      errorByCategory: Array.from(catErrors.entries())
+        .map(([cat, data]) => ({
+          category: cat,
+          avgErrorPercent: data.totalError / data.count,
+          sampleSize: data.count,
+        }))
+        .sort((a, b) => b.avgErrorPercent - a.avgErrorPercent),
+    };
+  }
+
+  /**
+   * Compute day-of-week patterns from completion records.
+   */
+  private computeDayOfWeekPatterns(
+    records: CompletionRow[],
+  ): DayOfWeekPattern[] {
+    const DAY_NAMES = [
+      "Sunday",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+    ];
+    const dayData = new Map<
+      number,
+      { actual: number[]; estimated: number[] }
+    >();
+
+    for (const r of records) {
+      const day = new Date(r.completed_at).getDay();
+      const entry = dayData.get(day) ?? { actual: [], estimated: [] };
+      entry.actual.push(r.actual_time);
+      entry.estimated.push(r.estimated_time);
+      dayData.set(day, entry);
+    }
+
+    const result: DayOfWeekPattern[] = [];
+    for (let i = 0; i < 7; i++) {
+      const data = dayData.get(i);
+      if (!data || data.actual.length === 0) continue;
+
+      const avgActual =
+        data.actual.reduce((s, v) => s + v, 0) / data.actual.length;
+      const avgEstimated =
+        data.estimated.reduce((s, v) => s + v, 0) / data.estimated.length;
+
+      let accSum = 0;
+      let accCount = 0;
+      for (let j = 0; j < data.actual.length; j++) {
+        if (data.estimated[j] > 0) {
+          accSum += computeEstimationAccuracy(
+            data.estimated[j],
+            data.actual[j],
+          );
+          accCount++;
+        }
+      }
+
+      result.push({
+        dayName: DAY_NAMES[i],
+        dayIndex: i,
+        tasksCompleted: data.actual.length,
+        avgActualTime: avgActual,
+        avgEstimatedTime: avgEstimated,
+        estimationAccuracy: accCount > 0 ? (accSum / accCount) * 100 : 0,
+      });
+    }
+
+    // Sort by day index (Monday first: 1,2,3,4,5,6,0)
+    result.sort((a, b) => ((a.dayIndex + 6) % 7) - ((b.dayIndex + 6) % 7));
+    return result;
+  }
+
+  /**
+   * Compute speed insights: fastest, slowest, quick wins, consistent overruns.
+   */
+  private computeSpeedInsights(categoryPerformance: {
+    stats: CategoryPerformanceStat[];
+  }): {
+    fastest: CategorySpeedInsight[];
+    slowest: CategorySpeedInsight[];
+    quickWins: CategorySpeedInsight[];
+    consistentOverruns: CategorySpeedInsight[];
+  } {
+    const insights: CategorySpeedInsight[] = categoryPerformance.stats
+      .filter((s) => s.sampleSize >= 3)
+      .map((s) => ({
+        category: s.category,
+        avgActualTime: s.avgActualTime,
+        avgEstimatedTime: s.avgEstimatedTime,
+        avgRatio:
+          s.avgEstimatedTime > 0 ? s.avgActualTime / s.avgEstimatedTime : 1,
+        sampleSize: s.sampleSize,
+      }));
+
+    const sorted = [...insights].sort(
+      (a, b) => a.avgActualTime - b.avgActualTime,
+    );
+
+    return {
+      fastest: sorted.slice(0, 5),
+      slowest: [...sorted].reverse().slice(0, 5),
+      quickWins: insights
+        .filter((i) => i.avgRatio < 0.8)
+        .sort((a, b) => a.avgRatio - b.avgRatio)
+        .slice(0, 5),
+      consistentOverruns: insights
+        .filter((i) => i.avgRatio > 1.2)
+        .sort((a, b) => b.avgRatio - a.avgRatio)
+        .slice(0, 5),
+    };
+  }
+
+  /**
+   * Compute AI learning progress per category.
+   */
+  private computeAILearningProgress(
+    _userId: string,
+    categoryPerformance: { stats: CategoryPerformanceStat[] },
+    weeklyByCategory: Map<string, WeeklyTrendPoint[]>,
+  ): CategoryLearningStatus[] {
+    return categoryPerformance.stats.map((stat) => {
+      const maturity =
+        stat.sampleSize < 3
+          ? "new"
+          : stat.sampleSize < 10
+            ? "learning"
+            : "ready";
+      const hasPersonalization = stat.sampleSize >= 10;
+
+      const weeklyData = weeklyByCategory.get(stat.category);
+      let recentAccuracyTrend: CategoryLearningStatus["recentAccuracyTrend"] =
+        "insufficient";
+      if (weeklyData && weeklyData.length >= 3) {
+        const accuracyValues = weeklyData.map((w) => w.estimationAccuracy);
+        const slope = linearRegressionSlope(accuracyValues);
+        const trend = classifyTrend(slope);
+        recentAccuracyTrend = trend.toLowerCase() as
+          | "improving"
+          | "stable"
+          | "declining";
+      }
+
+      return {
+        category: stat.category,
+        sampleSize: stat.sampleSize,
+        maturity,
+        hasPersonalization,
+        recentAccuracyTrend,
+      };
+    });
+  }
+
+  /**
+   * Compute productivity consistency metrics from weekly trends.
+   */
+  private computeProductivityConsistency(
+    weeklyTrends: WeeklyTrendPoint[],
+  ): ProductivityConsistency {
+    const weeklyScores = weeklyTrends.map((w) => ({
+      weekStart: w.weekStart,
+      tasksCompleted: w.tasksCompleted,
+      totalTime: w.totalActualTime,
+    }));
+
+    const taskCounts = weeklyTrends.map((w) => w.tasksCompleted);
+    const avgWeeklyTasks =
+      taskCounts.length > 0
+        ? taskCounts.reduce((s, v) => s + v, 0) / taskCounts.length
+        : 0;
+
+    // Coefficient of variation
+    let variance = 0;
+    if (taskCounts.length > 1 && avgWeeklyTasks > 0) {
+      const sumSquaredDiff = taskCounts.reduce(
+        (s, v) => s + Math.pow(v - avgWeeklyTasks, 2),
+        0,
+      );
+      const stdDev = Math.sqrt(sumSquaredDiff / taskCounts.length);
+      variance = (stdDev / avgWeeklyTasks) * 100;
+    }
+
+    let consistencyLabel: ProductivityConsistency["consistencyLabel"];
+    if (variance < 15) consistencyLabel = "very-consistent";
+    else if (variance < 30) consistencyLabel = "consistent";
+    else if (variance < 50) consistencyLabel = "variable";
+    else consistencyLabel = "highly-variable";
+
+    return {
+      weeklyScores,
+      avgWeeklyTasks,
+      taskVariancePercent: variance,
+      consistencyLabel,
+    };
+  }
+
+  /**
+   * Detect anomalous tasks that deviate significantly from category averages.
+   */
+  private computeAnomalies(records: CompletionRow[]): AnomalyEntry[] {
+    // Compute per-category averages
+    const catAvg = new Map<string, { sum: number; count: number }>();
+    for (const r of records) {
+      const cat = r.category_name ?? r.normalized_category ?? "Uncategorized";
+      const entry = catAvg.get(cat) ?? { sum: 0, count: 0 };
+      entry.sum += r.actual_time;
+      entry.count++;
+      catAvg.set(cat, entry);
+    }
+
+    const anomalies: AnomalyEntry[] = [];
+    for (const r of records) {
+      const cat = r.category_name ?? r.normalized_category ?? "Uncategorized";
+      const avg = catAvg.get(cat);
+      if (!avg || avg.count < 3) continue;
+
+      const categoryAvg = avg.sum / avg.count;
+      if (categoryAvg <= 0) continue;
+
+      const deviation = ((r.actual_time - categoryAvg) / categoryAvg) * 100;
+
+      // Flag tasks that took >100% longer than category average
+      if (deviation > 100) {
+        anomalies.push({
+          type: "slow-task",
+          description: r.task_description,
+          category: cat,
+          actualTime: r.actual_time,
+          expectedTime: categoryAvg,
+          deviationPercent: deviation,
+          completedAt: r.completed_at,
+        });
+      }
+    }
+
+    return anomalies
+      .sort((a, b) => b.deviationPercent - a.deviationPercent)
+      .slice(0, 10);
+  }
+
+  /**
+   * Compare current period with the equivalent previous period.
+   */
+  private computePeriodComparison(
+    userId: string,
+    startDate: string,
+    endDate: string,
+  ): PeriodComparison {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const durationMs = end.getTime() - start.getTime();
+
+    const prevEnd = new Date(start.getTime() - 1); // day before current start
+    const prevStart = new Date(prevEnd.getTime() - durationMs);
+    const prevStartStr = prevStart.toISOString().split("T")[0];
+    const prevEndStr = prevEnd.toISOString().split("T")[0];
+
+    const currentRecords = this.getAllCompletions(userId, startDate, endDate);
+    const previousRecords = this.getAllCompletions(
+      userId,
+      prevStartStr,
+      prevEndStr,
+    );
+
+    function computePeriodStats(records: CompletionRow[]) {
+      const total = records.length;
+      const totalActual = records.reduce((s, r) => s + r.actual_time, 0);
+      const avgActual = total > 0 ? totalActual / total : 0;
+      let accSum = 0;
+      let accCount = 0;
+      for (const r of records) {
+        if (r.estimated_time > 0) {
+          accSum += computeEstimationAccuracy(r.estimated_time, r.actual_time);
+          accCount++;
+        }
+      }
+      return {
+        tasksCompleted: total,
+        totalActualTime: totalActual,
+        avgActualTime: avgActual,
+        estimationAccuracy: accCount > 0 ? (accSum / accCount) * 100 : 0,
+      };
+    }
+
+    const current = computePeriodStats(currentRecords);
+    const previous = computePeriodStats(previousRecords);
+
+    const deltas = {
+      tasksCompleted: current.tasksCompleted - previous.tasksCompleted,
+      totalActualTime: current.totalActualTime - previous.totalActualTime,
+      avgActualTime: current.avgActualTime - previous.avgActualTime,
+      estimationAccuracy:
+        current.estimationAccuracy - previous.estimationAccuracy,
+    };
+
+    // Most changed category
+    const currentCatTime = new Map<string, number>();
+    for (const r of currentRecords) {
+      const cat = r.category_name ?? r.normalized_category ?? "Uncategorized";
+      currentCatTime.set(cat, (currentCatTime.get(cat) ?? 0) + r.actual_time);
+    }
+    const prevCatTime = new Map<string, number>();
+    for (const r of previousRecords) {
+      const cat = r.category_name ?? r.normalized_category ?? "Uncategorized";
+      prevCatTime.set(cat, (prevCatTime.get(cat) ?? 0) + r.actual_time);
+    }
+
+    let mostChanged: PeriodComparison["mostChangedCategory"] = null;
+    let maxChange = 0;
+    for (const [cat, currentTime] of currentCatTime) {
+      const prevTime = prevCatTime.get(cat) ?? 0;
+      if (prevTime === 0) continue;
+      const change = Math.abs(((currentTime - prevTime) / prevTime) * 100);
+      if (change > maxChange) {
+        maxChange = change;
+        mostChanged = {
+          category: cat,
+          changePercent: ((currentTime - prevTime) / prevTime) * 100,
+        };
+      }
+    }
+
+    return { current, previous, deltas, mostChangedCategory: mostChanged };
+  }
+
+  /**
+   * Generate actionable recommendations based on analytics data.
+   */
+  private computeRecommendations(
+    categoryPerformance: { stats: CategoryPerformanceStat[] },
+    _estimationErrors: EstimationErrorStats,
+    aiLearning: CategoryLearningStatus[],
+    productivityConsistency: ProductivityConsistency,
+  ): Recommendation[] {
+    const recs: Recommendation[] = [];
+    let id = 0;
+
+    // Categories with consistent overruns → add buffer
+    for (const stat of categoryPerformance.stats) {
+      if (stat.sampleSize >= 5 && stat.avgTimeOverrun > 10) {
+        const bufferMins = Math.round(stat.avgTimeOverrun);
+        recs.push({
+          id: `rec-${id++}`,
+          text: `Add ~${bufferMins} min buffer to ${stat.category} tasks — they consistently take longer than estimated.`,
+          type: "buffer",
+          category: stat.category,
+          priority: stat.avgTimeOverrun > 20 ? "high" : "medium",
+        });
+      }
+    }
+
+    // Categories with consistent overestimation → reduce estimates
+    for (const stat of categoryPerformance.stats) {
+      if (stat.sampleSize >= 5 && stat.avgTimeOverrun < -10) {
+        recs.push({
+          id: `rec-${id++}`,
+          text: `${stat.category} tasks are consistently overestimated — you finish ~${Math.round(Math.abs(stat.avgTimeOverrun))} min early on average.`,
+          type: "overestimation",
+          category: stat.category,
+          priority: "low",
+        });
+      }
+    }
+
+    // Categories improving
+    for (const learning of aiLearning) {
+      if (
+        learning.recentAccuracyTrend === "improving" &&
+        learning.sampleSize >= 5
+      ) {
+        recs.push({
+          id: `rec-${id++}`,
+          text: `You're improving in ${learning.category} — estimation accuracy is trending up.`,
+          type: "improvement",
+          category: learning.category,
+          priority: "low",
+        });
+      }
+    }
+
+    // Categories still learning
+    for (const learning of aiLearning) {
+      if (learning.maturity === "new") {
+        recs.push({
+          id: `rec-${id++}`,
+          text: `${learning.category} needs more data — complete a few more tasks for personalized estimates.`,
+          type: "learning",
+          category: learning.category,
+          priority: "medium",
+        });
+      }
+    }
+
+    // Consistency
+    if (productivityConsistency.consistencyLabel === "highly-variable") {
+      recs.push({
+        id: `rec-${id++}`,
+        text: "Your weekly task volume varies a lot — try setting a minimum weekly target for more consistent progress.",
+        type: "consistency",
+        priority: "medium",
+      });
+    }
+
+    return recs
+      .sort((a, b) => {
+        const priorityOrder = { high: 0, medium: 1, low: 2 };
+        return priorityOrder[a.priority] - priorityOrder[b.priority];
+      })
+      .slice(0, 8);
   }
 }
 

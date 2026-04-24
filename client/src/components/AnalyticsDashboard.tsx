@@ -8,6 +8,15 @@ import InsightsPanel from "./analytics/InsightsPanel";
 import EstimationAccuracy from "./analytics/EstimationAccuracy";
 import DifficultyCalibration from "./analytics/DifficultyCalibration";
 import RecentChanges from "./analytics/RecentChanges";
+import TimeAllocation from "./analytics/TimeAllocation";
+import EstimationErrors from "./analytics/EstimationErrors";
+import DayOfWeekPatterns from "./analytics/DayOfWeekPatterns";
+import SpeedInsights from "./analytics/SpeedInsights";
+import AILearningProgress from "./analytics/AILearningProgress";
+import ProductivityConsistencyPanel from "./analytics/ProductivityConsistencyPanel";
+import AnomaliesPanel from "./analytics/AnomaliesPanel";
+import PeriodComparisonPanel from "./analytics/PeriodComparisonPanel";
+import RecommendationsPanel from "./analytics/RecommendationsPanel";
 
 export interface AnalyticsDashboardProps {
   /** Current user ID for fetching analytics. */
@@ -26,11 +35,31 @@ function daysAgoISO(n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+type TabId =
+  | "overview"
+  | "time-categories"
+  | "estimation"
+  | "trends"
+  | "ai-learning";
+
+interface TabDef {
+  id: TabId;
+  label: string;
+}
+
+const TABS: TabDef[] = [
+  { id: "overview", label: "Overview" },
+  { id: "time-categories", label: "Time & Categories" },
+  { id: "estimation", label: "Estimation" },
+  { id: "trends", label: "Trends" },
+  { id: "ai-learning", label: "AI Learning" },
+];
+
 /**
  * Analytics Dashboard component.
  *
  * Fetches analytics via GET /api/analytics/:userId with a selectable
- * date range and displays decomposed dashboard sections.
+ * date range and displays decomposed dashboard sections organized into tabs.
  *
  * Requirements: 9.3, 10.1, 10.2, 10.3, 10.4, 10.6, 11.1, 11.2, 11.3, 11.4
  */
@@ -42,6 +71,7 @@ export default function AnalyticsDashboard({
   const [summary, setSummary] = useState<ExtendedAnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<TabId>("overview");
 
   const fetchAnalytics = useCallback(async () => {
     setLoading(true);
@@ -144,69 +174,159 @@ export default function AnalyticsDashboard({
             </div>
           )}
 
-          {/* KPI Panel */}
-          <KPIPanel
-            kpis={summary.kpis}
-            insufficientData={summary.insufficientData}
-            totalCompleted={totalCompleted}
-          />
-
-          {/* Weekly Behavior Trends */}
-          {summary.weeklyTrends && (
-            <WeeklyTrends
-              weeklyTrends={summary.weeklyTrends}
-              weeksOfData={weeksOfData}
-            />
+          {/* Tab navigation */}
+          {totalCompleted > 0 && (
+            <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
           )}
 
-          {/* Category Performance */}
-          {summary.categoryPerformance && (
-            <CategoryPerformance
-              stats={summary.categoryPerformance.stats}
-              consistentlyFaster={
-                summary.categoryPerformance.consistentlyFaster
-              }
-              consistentlySlower={
-                summary.categoryPerformance.consistentlySlower
-              }
-            />
+          {/* Tab content */}
+          {activeTab === "overview" && (
+            <div className="space-y-6">
+              {/* KPI Panel */}
+              <KPIPanel
+                kpis={summary.kpis}
+                insufficientData={summary.insufficientData}
+                totalCompleted={totalCompleted}
+              />
+
+              {/* Period Comparison */}
+              {summary.periodComparison && (
+                <PeriodComparisonPanel
+                  comparison={summary.periodComparison}
+                  totalCompleted={totalCompleted}
+                />
+              )}
+
+              {/* Recommendations */}
+              <RecommendationsPanel
+                recommendations={summary.recommendations ?? []}
+                totalCompleted={totalCompleted}
+              />
+            </div>
           )}
 
-          {/* Behavioral Insights */}
-          {summary.insights && (
-            <InsightsPanel
-              insights={summary.insights}
-              totalCompleted={totalCompleted}
-            />
+          {activeTab === "time-categories" && (
+            <div className="space-y-6">
+              {/* Time Allocation */}
+              <TimeAllocation
+                timeAllocation={summary.timeAllocation ?? []}
+                totalCompleted={totalCompleted}
+              />
+
+              {/* Category Performance */}
+              {summary.categoryPerformance && (
+                <CategoryPerformance
+                  stats={summary.categoryPerformance.stats}
+                  consistentlyFaster={
+                    summary.categoryPerformance.consistentlyFaster
+                  }
+                  consistentlySlower={
+                    summary.categoryPerformance.consistentlySlower
+                  }
+                />
+              )}
+
+              {/* Speed Insights */}
+              {summary.speedInsights && (
+                <SpeedInsights
+                  speedInsights={summary.speedInsights}
+                  totalCompleted={totalCompleted}
+                />
+              )}
+            </div>
           )}
 
-          {/* Estimation Accuracy */}
-          {summary.estimationAccuracyTrend && (
-            <EstimationAccuracy
-              weeklyAccuracy={summary.estimationAccuracyTrend.weeklyAccuracy}
-              trendLabel={summary.estimationAccuracyTrend.trendLabel}
-              weeksOfData={weeksOfData}
-            />
+          {activeTab === "estimation" && (
+            <div className="space-y-6">
+              {/* Estimation Accuracy */}
+              {summary.estimationAccuracyTrend && (
+                <EstimationAccuracy
+                  weeklyAccuracy={
+                    summary.estimationAccuracyTrend.weeklyAccuracy
+                  }
+                  trendLabel={summary.estimationAccuracyTrend.trendLabel}
+                  weeksOfData={weeksOfData}
+                />
+              )}
+
+              {/* Estimation Errors */}
+              {summary.estimationErrors && (
+                <EstimationErrors
+                  estimationErrors={summary.estimationErrors}
+                  totalCompleted={totalCompleted}
+                />
+              )}
+
+              {/* Difficulty & Effort Calibration */}
+              {summary.difficultyCalibration && (
+                <DifficultyCalibration
+                  calibration={summary.difficultyCalibration}
+                />
+              )}
+            </div>
           )}
 
-          {/* Difficulty & Effort Calibration */}
-          {summary.difficultyCalibration && (
-            <DifficultyCalibration
-              calibration={summary.difficultyCalibration}
-            />
+          {activeTab === "trends" && (
+            <div className="space-y-6">
+              {/* Weekly Behavior Trends */}
+              {summary.weeklyTrends && (
+                <WeeklyTrends
+                  weeklyTrends={summary.weeklyTrends}
+                  weeksOfData={weeksOfData}
+                />
+              )}
+
+              {/* Day-of-Week Patterns */}
+              <DayOfWeekPatterns
+                patterns={summary.dayOfWeekPatterns ?? []}
+                totalCompleted={totalCompleted}
+              />
+
+              {/* Productivity Consistency */}
+              {summary.productivityConsistency && (
+                <ProductivityConsistencyPanel
+                  consistency={summary.productivityConsistency}
+                  weeksOfData={weeksOfData}
+                />
+              )}
+            </div>
           )}
 
-          {/* Recent Behavioral Changes */}
-          {summary.recentChanges && (
-            <RecentChanges
-              fasterCategories={summary.recentChanges.fasterCategories}
-              slowerCategories={summary.recentChanges.slowerCategories}
-              largestOverruns={summary.recentChanges.largestOverruns}
-              limitedDataCategories={
-                summary.recentChanges.limitedDataCategories
-              }
-              daysOfData={daysOfData}
-            />
+          {activeTab === "ai-learning" && (
+            <div className="space-y-6">
+              {/* AI Learning Progress */}
+              <AILearningProgress
+                learningProgress={summary.aiLearningProgress ?? []}
+                totalCompleted={totalCompleted}
+              />
+
+              {/* Behavioral Insights */}
+              {summary.insights && (
+                <InsightsPanel
+                  insights={summary.insights}
+                  totalCompleted={totalCompleted}
+                />
+              )}
+
+              {/* Recent Behavioral Changes */}
+              {summary.recentChanges && (
+                <RecentChanges
+                  fasterCategories={summary.recentChanges.fasterCategories}
+                  slowerCategories={summary.recentChanges.slowerCategories}
+                  largestOverruns={summary.recentChanges.largestOverruns}
+                  limitedDataCategories={
+                    summary.recentChanges.limitedDataCategories
+                  }
+                  daysOfData={daysOfData}
+                />
+              )}
+
+              {/* Anomalies */}
+              <AnomaliesPanel
+                anomalies={summary.anomalies ?? []}
+                totalCompleted={totalCompleted}
+              />
+            </div>
           )}
         </>
       )}
@@ -217,6 +337,33 @@ export default function AnalyticsDashboard({
 /* ------------------------------------------------------------------ */
 /* Sub-components                                                      */
 /* ------------------------------------------------------------------ */
+
+function TabBar({
+  activeTab,
+  onTabChange,
+}: {
+  activeTab: TabId;
+  onTabChange: (tab: TabId) => void;
+}) {
+  return (
+    <nav aria-label="Dashboard sections" className="flex flex-wrap gap-2">
+      {TABS.map((tab) => (
+        <button
+          key={tab.id}
+          onClick={() => onTabChange(tab.id)}
+          className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+            activeTab === tab.id
+              ? "bg-accent text-white"
+              : "bg-dark-card border border-dark-border text-text-secondary hover:text-text-primary hover:border-accent/50"
+          }`}
+          aria-current={activeTab === tab.id ? "page" : undefined}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </nav>
+  );
+}
 
 function DateRangeSelector({
   startDate,

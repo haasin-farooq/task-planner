@@ -230,6 +230,7 @@ export class TaskAnalyzer {
           analyzedTask.description,
           activeCategories,
           activeCategoryCount,
+          analyzedTask.rawText,
         );
 
         const categoryEntity = this.categoryRepo.create(

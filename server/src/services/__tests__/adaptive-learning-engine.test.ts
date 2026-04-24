@@ -58,7 +58,7 @@ describe("AdaptiveLearningEngine", () => {
     const model = engine.getBehavioralModel("user-1");
     expect(model.totalCompletedTasks).toBe(1);
     expect(model.adjustments).toHaveLength(1);
-    expect(model.adjustments[0].category).toBe("coding");
+    expect(model.adjustments[0].category).toBe("Development");
     expect(model.adjustments[0].sampleSize).toBe(1);
     // 45 / 60 = 0.75
     expect(model.adjustments[0].timeMultiplier).toBeCloseTo(0.75, 4);
@@ -108,8 +108,8 @@ describe("AdaptiveLearningEngine", () => {
     expect(model.totalCompletedTasks).toBe(2);
     expect(model.adjustments).toHaveLength(2);
 
-    const coding = model.adjustments.find((a) => a.category === "coding");
-    const writing = model.adjustments.find((a) => a.category === "writing");
+    const coding = model.adjustments.find((a) => a.category === "Development");
+    const writing = model.adjustments.find((a) => a.category === "Writing");
 
     expect(coding).toBeDefined();
     expect(writing).toBeDefined();

@@ -29,7 +29,7 @@ function makeRecord(overrides: Partial<CompletionRecord>): CompletionRecord {
   return {
     taskId: "task-1",
     userId: "user-1",
-    description: "test-category",
+    description: "writing tasks",
     estimatedTime: 60,
     actualTime: 60,
     difficultyLevel: 3,
@@ -116,7 +116,7 @@ describe("Property 8: Adaptive learning adjustment direction", () => {
 
           const model = engine.getBehavioralModel("user-1");
           const adj = model.adjustments.find(
-            (a) => a.category === "test-category",
+            (a) => a.category === "Writing",
           );
 
           // Must have an adjustment entry
@@ -157,7 +157,7 @@ describe("Property 8: Adaptive learning adjustment direction", () => {
 
           const model = engine.getBehavioralModel("user-1");
           const adj = model.adjustments.find(
-            (a) => a.category === "test-category",
+            (a) => a.category === "Writing",
           );
 
           expect(adj).toBeDefined();
@@ -196,7 +196,7 @@ describe("Property 8: Adaptive learning adjustment direction", () => {
 
           const model = engine.getBehavioralModel("user-1");
           const adj = model.adjustments.find(
-            (a) => a.category === "test-category",
+            (a) => a.category === "Writing",
           );
 
           expect(adj).toBeDefined();
@@ -243,7 +243,7 @@ describe("Property 8: Adaptive learning adjustment direction", () => {
 
           const model = engine.getBehavioralModel("user-1");
           const adj = model.adjustments.find(
-            (a) => a.category === "test-category",
+            (a) => a.category === "Writing",
           );
 
           expect(adj).toBeDefined();

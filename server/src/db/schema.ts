@@ -40,6 +40,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   effort_percentage REAL CHECK (effort_percentage BETWEEN 0 AND 100),
   difficulty_level INTEGER CHECK (difficulty_level BETWEEN 1 AND 5),
   estimated_time INTEGER,
+  category TEXT DEFAULT NULL,
+  category_id INTEGER DEFAULT NULL REFERENCES categories(id),
   is_completed BOOLEAN DEFAULT FALSE,
   actual_time INTEGER,
   completed_at TIMESTAMP,
@@ -459,4 +461,14 @@ export function runMigrations(db: import("better-sqlite3").Database): void {
 
   // Migrate categories table: add per-user columns, backfill, recreate with new constraint
   migrateCategoriesTable(db);
+
+  // Migration: add category and category_id columns to tasks table
+  if (!columnExists(db, "tasks", "category")) {
+    db.exec("ALTER TABLE tasks ADD COLUMN category TEXT DEFAULT NULL");
+  }
+  if (!columnExists(db, "tasks", "category_id")) {
+    db.exec(
+      "ALTER TABLE tasks ADD COLUMN category_id INTEGER DEFAULT NULL REFERENCES categories(id)",
+    );
+  }
 }
