@@ -38,7 +38,7 @@ function MiniProgressRing({
         cy={size / 2}
         r={radius}
         fill="none"
-        stroke="#E8E4DF"
+        stroke="var(--color-border)"
         strokeWidth={strokeWidth}
       />
       <circle
@@ -46,7 +46,7 @@ function MiniProgressRing({
         cy={size / 2}
         r={radius}
         fill="none"
-        stroke="#E8734A"
+        stroke="var(--color-accent)"
         strokeWidth={strokeWidth}
         strokeDasharray={circumference}
         strokeDashoffset={offset}
@@ -101,29 +101,28 @@ interface KPICardProps {
 
 function KPICard({ label, value, icon, trend, subtitle }: KPICardProps) {
   return (
-    <div className="rounded-lg border border-[#E8E4DF] bg-white p-4 flex flex-col gap-1">
+    <div className="rounded-lg border border-dark-border bg-dark-card p-4 flex flex-col gap-1">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium uppercase tracking-wide text-[#6B6B6B]">
+        <span className="text-xs font-medium uppercase tracking-wide text-text-secondary">
           {label}
         </span>
         {icon}
       </div>
       <div className="flex items-baseline gap-1">
-        <span className="font-serif text-2xl font-semibold text-[#1A1A1A]">
+        <span className="font-serif text-2xl font-semibold text-text-primary">
           {value}
         </span>
         {trend && <TrendArrow direction={trend} />}
       </div>
-      {subtitle && <span className="text-xs text-[#6B6B6B]">{subtitle}</span>}
+      {subtitle && (
+        <span className="text-xs text-text-secondary">{subtitle}</span>
+      )}
     </div>
   );
 }
 
 /**
  * KPI Panel — displays 6 key performance indicator cards in a responsive grid.
- *
- * Shows a low-data state when totalCompleted < 5.
- * Uses cream background, orange accents, and Lora serif for headings.
  *
  * Requirements: 2.1–2.7, 9.1, 9.2, 9.4, 10.2, 10.3, 10.4, 11.3
  */
@@ -137,7 +136,7 @@ export default function KPIPanel({
   if (showLowData) {
     return (
       <section aria-label="Key Performance Indicators">
-        <h3 className="font-serif text-xl font-semibold text-[#1A1A1A] mb-3">
+        <h3 className="font-serif text-xl font-semibold text-text-primary mb-3">
           Overview
         </h3>
         <LowDataState
@@ -168,18 +167,10 @@ export default function KPIPanel({
 
   return (
     <section aria-label="Key Performance Indicators">
-      <h3 className="font-serif text-xl font-semibold text-[#1A1A1A] mb-3">
+      <h3 className="font-serif text-xl font-semibold text-text-primary mb-3">
         Overview
       </h3>
-      <div
-        className="grid grid-cols-2 gap-3 md:grid-cols-3"
-        style={{
-          backgroundColor: "#FFF8F0",
-          padding: "1.25rem",
-          borderRadius: "0.5rem",
-          border: "1px solid #E8E4DF",
-        }}
-      >
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 p-5 rounded-lg border border-dark-border bg-dark-surface">
         {/* 2.1 — Total Completed */}
         <KPICard
           label="Completed"

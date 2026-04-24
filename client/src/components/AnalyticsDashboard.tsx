@@ -30,18 +30,7 @@ function daysAgoISO(n: number): string {
  * Analytics Dashboard component.
  *
  * Fetches analytics via GET /api/analytics/:userId with a selectable
- * date range and displays decomposed dashboard sections:
- * - KPI Panel (overview metrics)
- * - Weekly Behavior Trends (line charts)
- * - Category Performance (sortable table)
- * - Behavioral Insights (natural language cards)
- * - Estimation Accuracy (trend charts + label)
- * - Difficulty & Effort Calibration (table)
- * - Recent Behavioral Changes (lists + overruns)
- *
- * Preserves backward compatibility: the insufficient-data banner still
- * renders when the base AnalyticsSummary flags it, and the zero-completed
- * welcome state is handled.
+ * date range and displays decomposed dashboard sections.
  *
  * Requirements: 9.3, 10.1, 10.2, 10.3, 10.4, 10.6, 11.1, 11.2, 11.3, 11.4
  */
@@ -81,7 +70,7 @@ export default function AnalyticsDashboard({
 
   return (
     <section aria-label="Analytics dashboard" className="space-y-6 pb-12">
-      <h2 className="font-serif text-2xl font-bold text-[#1A1A1A]">
+      <h2 className="font-serif text-2xl font-bold text-text-primary">
         Analytics Dashboard
       </h2>
 
@@ -94,7 +83,7 @@ export default function AnalyticsDashboard({
       />
 
       {loading && (
-        <p aria-live="polite" className="text-[#6B6B6B]">
+        <p aria-live="polite" className="text-text-secondary">
           Loading analytics…
         </p>
       )}
@@ -113,7 +102,7 @@ export default function AnalyticsDashboard({
               role="status"
               aria-live="polite"
               data-testid="insufficient-data"
-              className="rounded-lg border border-amber-400 bg-amber-50 p-4 mb-4 text-amber-800"
+              className="rounded-lg border border-amber-400 bg-amber-50 dark:bg-amber-900/20 p-4 mb-4 text-amber-800 dark:text-amber-300"
             >
               <strong>Not enough data yet.</strong> Complete at least 5 tasks to
               see meaningful analytics.
@@ -125,10 +114,9 @@ export default function AnalyticsDashboard({
             <div
               role="status"
               aria-live="polite"
-              className="rounded-lg border border-[#E8E4DF] p-8 text-center"
-              style={{ backgroundColor: "#FFF8F0" }}
+              className="rounded-lg border border-dark-border p-8 text-center bg-dark-card"
             >
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#E8734A]/10">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-accent/10">
                 <svg
                   width="32"
                   height="32"
@@ -145,10 +133,10 @@ export default function AnalyticsDashboard({
                   />
                 </svg>
               </div>
-              <h3 className="font-serif text-xl font-semibold text-[#1A1A1A]">
+              <h3 className="font-serif text-xl font-semibold text-text-primary">
                 Welcome to Your Analytics Dashboard
               </h3>
-              <p className="mt-2 text-sm text-[#6B6B6B] max-w-md mx-auto">
+              <p className="mt-2 text-sm text-text-secondary max-w-md mx-auto">
                 Start completing tasks to unlock insights about your
                 productivity patterns. Your data will appear here as you make
                 progress.
@@ -156,16 +144,14 @@ export default function AnalyticsDashboard({
             </div>
           )}
 
-          {/* Req 10.1 — Sections in order: KPI → Trends → Category → Insights → Accuracy → Calibration → Changes */}
-
-          {/* KPI Panel — Req 2.1–2.7 */}
+          {/* KPI Panel */}
           <KPIPanel
             kpis={summary.kpis}
             insufficientData={summary.insufficientData}
             totalCompleted={totalCompleted}
           />
 
-          {/* Weekly Behavior Trends — Req 3.1–3.6 */}
+          {/* Weekly Behavior Trends */}
           {summary.weeklyTrends && (
             <WeeklyTrends
               weeklyTrends={summary.weeklyTrends}
@@ -173,7 +159,7 @@ export default function AnalyticsDashboard({
             />
           )}
 
-          {/* Category Performance — Req 4.1–4.5 */}
+          {/* Category Performance */}
           {summary.categoryPerformance && (
             <CategoryPerformance
               stats={summary.categoryPerformance.stats}
@@ -186,7 +172,7 @@ export default function AnalyticsDashboard({
             />
           )}
 
-          {/* Behavioral Insights — Req 5.5, 5.6 */}
+          {/* Behavioral Insights */}
           {summary.insights && (
             <InsightsPanel
               insights={summary.insights}
@@ -194,7 +180,7 @@ export default function AnalyticsDashboard({
             />
           )}
 
-          {/* Estimation Accuracy — Req 6.1–6.4 */}
+          {/* Estimation Accuracy */}
           {summary.estimationAccuracyTrend && (
             <EstimationAccuracy
               weeklyAccuracy={summary.estimationAccuracyTrend.weeklyAccuracy}
@@ -203,14 +189,14 @@ export default function AnalyticsDashboard({
             />
           )}
 
-          {/* Difficulty & Effort Calibration — Req 7.1–7.4 */}
+          {/* Difficulty & Effort Calibration */}
           {summary.difficultyCalibration && (
             <DifficultyCalibration
               calibration={summary.difficultyCalibration}
             />
           )}
 
-          {/* Recent Behavioral Changes — Req 8.1–8.5 */}
+          {/* Recent Behavioral Changes */}
           {summary.recentChanges && (
             <RecentChanges
               fasterCategories={summary.recentChanges.fasterCategories}
@@ -244,11 +230,11 @@ function DateRangeSelector({
   onEndDateChange: (v: string) => void;
 }) {
   return (
-    <fieldset className="flex flex-wrap gap-4 items-center mb-6 border border-[#E8E4DF] rounded-lg p-3 bg-white">
-      <legend className="text-sm font-medium text-[#6B6B6B] px-1">
+    <fieldset className="flex flex-wrap gap-4 items-center mb-6 border border-dark-border rounded-lg p-3 bg-dark-card">
+      <legend className="text-sm font-medium text-text-secondary px-1">
         Date Range
       </legend>
-      <label className="text-sm text-[#6B6B6B]">
+      <label className="text-sm text-text-secondary">
         From{" "}
         <input
           type="date"
@@ -256,10 +242,10 @@ function DateRangeSelector({
           max={endDate}
           onChange={(e) => onStartDateChange(e.target.value)}
           aria-label="Start date"
-          className="ml-1 rounded-md border border-[#E8E4DF] bg-white px-2 py-1 text-sm text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-[#E8734A]"
+          className="ml-1 rounded-md border border-dark-border bg-dark-bg px-2 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
         />
       </label>
-      <label className="text-sm text-[#6B6B6B]">
+      <label className="text-sm text-text-secondary">
         To{" "}
         <input
           type="date"
@@ -268,7 +254,7 @@ function DateRangeSelector({
           max={todayISO()}
           onChange={(e) => onEndDateChange(e.target.value)}
           aria-label="End date"
-          className="ml-1 rounded-md border border-[#E8E4DF] bg-white px-2 py-1 text-sm text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-[#E8734A]"
+          className="ml-1 rounded-md border border-dark-border bg-dark-bg px-2 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
         />
       </label>
     </fieldset>

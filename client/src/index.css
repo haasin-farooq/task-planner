@@ -5,9 +5,35 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --color-bg: #FAF8F5;
+    --color-surface: #F0EDE8;
+    --color-card: #FFFFFF;
+    --color-border: #E8E4DF;
+    --color-text-primary: #1A1A1A;
+    --color-text-secondary: #6B6B6B;
+    --color-text-muted: #9CA3AF;
+    --color-hover: #E8E4DF;
+    --color-accent: #E8734A;
+    --color-accent-dark: #D4623B;
+  }
+
+  .dark {
+    --color-bg: #121212;
+    --color-surface: #1A1A1A;
+    --color-card: #1E1E1E;
+    --color-border: #2A2A2A;
+    --color-text-primary: #F0F0F0;
+    --color-text-secondary: #9CA3AF;
+    --color-text-muted: #6B7280;
+    --color-hover: #2A2A2A;
+    --color-accent: #E8734A;
+    --color-accent-dark: #D4623B;
+  }
+
   html,
   body {
-    @apply bg-dark-bg text-gray-800 m-0 p-0;
+    @apply bg-dark-bg text-text-primary m-0 p-0;
     height: 100vh;
     overflow: hidden;
   }

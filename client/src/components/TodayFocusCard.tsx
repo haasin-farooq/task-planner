@@ -8,11 +8,11 @@
  */
 export default function TodayFocusCard() {
   return (
-    <div className="rounded-lg bg-white border border-dark-border p-4">
-      <h3 className="text-sm font-semibold text-[#1A1A1A] mb-2">
+    <div className="rounded-lg bg-dark-card border border-dark-border p-4">
+      <h3 className="text-sm font-semibold text-text-primary mb-2">
         Today's Focus
       </h3>
-      <p className="text-sm text-[#6B6B6B]">
+      <p className="text-sm text-text-secondary">
         Focus on 1-2 high impact tasks to make meaningful progress.
       </p>
     </div>

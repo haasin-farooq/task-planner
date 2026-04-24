@@ -47,14 +47,14 @@ export default function TaskCard({
   return (
     <div
       data-testid={`task-card-${task.id}`}
-      className={`rounded-lg border border-dark-border bg-white p-4 ${
+      className={`rounded-lg border border-dark-border bg-dark-card p-4 ${
         isCompleted ? "opacity-50" : ""
       }`}
     >
       {/* Top row: index, status dot, title, overflow menu */}
       <div className="flex items-start gap-3">
         {/* Numbered index */}
-        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-dark-bg text-xs font-semibold text-[#6B6B6B]">
+        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-dark-bg text-xs font-semibold text-text-secondary">
           {index}
         </span>
 
@@ -67,14 +67,14 @@ export default function TaskCard({
         {/* Title and description */}
         <div className="min-w-0 flex-1">
           <h3
-            className={`text-sm font-semibold text-[#1A1A1A] ${
+            className={`text-sm font-semibold text-text-primary ${
               isCompleted ? "line-through" : ""
             }`}
           >
             {task.description}
           </h3>
           {task.rawText !== task.description && (
-            <p className="mt-0.5 text-xs text-[#6B6B6B]">{task.rawText}</p>
+            <p className="mt-0.5 text-xs text-text-secondary">{task.rawText}</p>
           )}
         </div>
 
@@ -85,7 +85,7 @@ export default function TaskCard({
       </div>
 
       {/* Metrics row */}
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 pl-9 text-sm text-[#6B6B6B]">
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 pl-9 text-sm text-text-secondary">
         {/* Priority badge — Req 5.4 */}
         <PriorityBadge priority={metrics.priority} />
 
@@ -101,7 +101,7 @@ export default function TaskCard({
         {/* Estimated time with clock icon — Req 5.7 */}
         <span className="inline-flex items-center gap-1">
           <svg
-            className="h-4 w-4 text-[#6B6B6B]"
+            className="h-4 w-4 text-text-secondary"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -116,9 +116,9 @@ export default function TaskCard({
       </div>
 
       {/* Dependencies row — Req 5.8 */}
-      <div className="mt-2 flex items-start gap-1 pl-9 text-sm text-[#6B6B6B]">
+      <div className="mt-2 flex items-start gap-1 pl-9 text-sm text-text-secondary">
         <svg
-          className="mt-0.5 h-4 w-4 shrink-0 text-[#6B6B6B]"
+          className="mt-0.5 h-4 w-4 shrink-0 text-text-secondary"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -134,7 +134,7 @@ export default function TaskCard({
               <span
                 key={depId}
                 data-testid="dependency-item"
-                className="rounded bg-dark-bg px-1.5 py-0.5 text-xs text-[#6B6B6B]"
+                className="rounded bg-dark-bg px-1.5 py-0.5 text-xs text-text-secondary"
               >
                 {taskDescriptionById.get(depId) ?? depId}
               </span>

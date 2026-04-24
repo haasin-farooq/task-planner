@@ -117,12 +117,12 @@ export default function StrategySelector({
   // -------------------------------------------------------------------
   return (
     <section aria-label="Prioritization strategy">
-      <h3 className="text-sm font-semibold text-[#6B6B6B] mb-2">
+      <h3 className="text-sm font-semibold text-text-secondary mb-2">
         Sort Strategy
       </h3>
 
       {loading ? (
-        <p className="text-sm text-[#6B6B6B]" aria-live="polite">
+        <p className="text-sm text-text-secondary" aria-live="polite">
           Loading preference…
         </p>
       ) : (
@@ -143,8 +143,8 @@ export default function StrategySelector({
                 className={[
                   "px-3 py-2 rounded-full text-sm transition-colors",
                   isActive
-                    ? "bg-[#2A2A2A] text-white font-semibold"
-                    : "border border-dark-border bg-white text-[#6B6B6B] hover:bg-dark-bg hover:text-[#1A1A1A]",
+                    ? "bg-accent text-white font-semibold"
+                    : "border border-dark-border bg-dark-card text-text-secondary hover:bg-dark-hover hover:text-text-primary",
                   saving ? "cursor-not-allowed opacity-60" : "cursor-pointer",
                 ].join(" ")}
               >
@@ -156,7 +156,7 @@ export default function StrategySelector({
       )}
 
       {saving && (
-        <p className="text-xs text-[#6B6B6B] mt-1" aria-live="polite">
+        <p className="text-xs text-text-secondary mt-1" aria-live="polite">
           Saving…
         </p>
       )}

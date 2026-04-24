@@ -85,22 +85,22 @@ export default function CompletionDialog({
         if (e.key === "Escape") onCancel();
       }}
     >
-      <div className="bg-white rounded-xl p-6 max-w-md w-[90%] shadow-[0_20px_60px_rgba(0,0,0,0.15)] border border-dark-border">
-        <h3 className="mt-0 text-lg font-semibold text-[#1A1A1A]">
+      <div className="bg-dark-card rounded-xl p-6 max-w-md w-[90%] shadow-[0_20px_60px_rgba(0,0,0,0.15)] border border-dark-border">
+        <h3 className="mt-0 text-lg font-semibold text-text-primary">
           Complete Task
         </h3>
 
-        <p className="text-[#1A1A1A]">
+        <p className="text-text-primary">
           <strong>{task.description}</strong>
         </p>
 
-        <p className="text-sm text-[#6B6B6B]">
+        <p className="text-sm text-text-secondary">
           Estimated time: {task.metrics.estimatedTime} min
         </p>
 
         <label
           htmlFor="actual-time-input"
-          className="block mb-1 font-medium text-[#1A1A1A]"
+          className="block mb-1 font-medium text-text-primary"
         >
           Actual time spent (minutes)
         </label>
@@ -121,7 +121,7 @@ export default function CompletionDialog({
           aria-label="Actual time spent in minutes"
           data-testid="actual-time-input"
           autoFocus
-          className="w-full px-3 py-2 text-base rounded-md bg-dark-bg border border-dark-border text-[#1A1A1A] placeholder-gray-400 box-border focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50"
+          className="w-full px-3 py-2 text-base rounded-md bg-dark-bg border border-dark-border text-text-primary placeholder-text-muted box-border focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50"
         />
 
         {error && (
@@ -139,7 +139,7 @@ export default function CompletionDialog({
             onClick={onCancel}
             disabled={submitting}
             aria-label="Cancel"
-            className="px-4 py-2 rounded-md bg-dark-bg border border-dark-border text-[#6B6B6B] hover:bg-dark-border transition-colors disabled:cursor-not-allowed"
+            className="px-4 py-2 rounded-md bg-dark-bg border border-dark-border text-text-secondary hover:bg-dark-hover transition-colors disabled:cursor-not-allowed"
           >
             Cancel
           </button>

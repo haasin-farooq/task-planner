@@ -20,20 +20,12 @@ export interface TrendChartProps {
   formatValue?: (value: number) => string;
 }
 
-/** Warm editorial color tokens matching the project design system. */
-const COLORS = {
-  primary: "#E8734A", // accent orange
-  secondary: "#9C9590", // warm gray
-  grid: "#E8E4DF", // dark-border
-  axisText: "#6B6B6B",
-  tooltipBg: "#FFFFFF",
-  tooltipBorder: "#E8E4DF",
-};
-
 /**
  * A thin wrapper around Recharts LineChart styled with the warm editorial
  * design system. Renders inside a ResponsiveContainer so it adapts to its
  * parent width automatically.
+ *
+ * Uses CSS variables for theme-aware colors.
  *
  * Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 10.2, 10.5, 11.1
  */
@@ -57,38 +49,42 @@ export default function TrendChart({
     <div
       aria-label={ariaLabel}
       role="img"
-      className="w-full rounded-lg border border-[#E8E4DF] bg-white p-4"
+      className="w-full rounded-lg border border-dark-border bg-dark-card p-4"
     >
       <ResponsiveContainer width="100%" height={height}>
         <LineChart
           data={data}
           margin={{ top: 8, right: 16, bottom: 4, left: 0 }}
         >
-          <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
 
           <XAxis
             dataKey="label"
-            tick={{ fontSize: 12, fill: COLORS.axisText }}
+            tick={{ fontSize: 12, fill: "var(--color-text-secondary)" }}
             tickLine={false}
-            axisLine={{ stroke: COLORS.grid }}
+            axisLine={{ stroke: "var(--color-border)" }}
           />
 
           <YAxis
-            tick={{ fontSize: 12, fill: COLORS.axisText }}
+            tick={{ fontSize: 12, fill: "var(--color-text-secondary)" }}
             tickLine={false}
-            axisLine={{ stroke: COLORS.grid }}
+            axisLine={{ stroke: "var(--color-border)" }}
             tickFormatter={format}
           />
 
           <Tooltip
             formatter={tooltipFormatter}
             contentStyle={{
-              backgroundColor: COLORS.tooltipBg,
-              border: `1px solid ${COLORS.tooltipBorder}`,
+              backgroundColor: "var(--color-card)",
+              border: "1px solid var(--color-border)",
               borderRadius: 8,
               fontSize: 13,
+              color: "var(--color-text-primary)",
             }}
-            labelStyle={{ color: COLORS.axisText, fontWeight: 600 }}
+            labelStyle={{
+              color: "var(--color-text-secondary)",
+              fontWeight: 600,
+            }}
           />
 
           {showSecondaryLine && <Legend />}
@@ -97,10 +93,10 @@ export default function TrendChart({
             type="monotone"
             dataKey="value"
             name={valueLabel}
-            stroke={COLORS.primary}
+            stroke="var(--color-accent)"
             strokeWidth={2}
-            dot={{ r: 4, fill: COLORS.primary, strokeWidth: 0 }}
-            activeDot={{ r: 6, fill: COLORS.primary, strokeWidth: 0 }}
+            dot={{ r: 4, fill: "var(--color-accent)", strokeWidth: 0 }}
+            activeDot={{ r: 6, fill: "var(--color-accent)", strokeWidth: 0 }}
           />
 
           {showSecondaryLine && (
@@ -108,11 +104,11 @@ export default function TrendChart({
               type="monotone"
               dataKey="secondaryValue"
               name={secondaryLabel}
-              stroke={COLORS.secondary}
+              stroke="#9C9590"
               strokeWidth={2}
               strokeDasharray="4 3"
-              dot={{ r: 4, fill: COLORS.secondary, strokeWidth: 0 }}
-              activeDot={{ r: 6, fill: COLORS.secondary, strokeWidth: 0 }}
+              dot={{ r: 4, fill: "#9C9590", strokeWidth: 0 }}
+              activeDot={{ r: 6, fill: "#9C9590", strokeWidth: 0 }}
             />
           )}
         </LineChart>

@@ -26,10 +26,10 @@ export default function UpcomingCard({
   const upcoming = tasks.filter((t) => !completedTaskIds.has(t.id)).slice(0, 4);
 
   return (
-    <div className="rounded-lg bg-white border border-dark-border p-4">
+    <div className="rounded-lg bg-dark-card border border-dark-border p-4">
       {/* Header with title and "View all" link */}
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-[#1A1A1A]">Upcoming</h3>
+        <h3 className="text-sm font-semibold text-text-primary">Upcoming</h3>
         <a
           href="#"
           className="text-xs text-accent hover:text-accent-dark transition-colors"
@@ -40,17 +40,17 @@ export default function UpcomingCard({
       </div>
 
       {upcoming.length === 0 ? (
-        <p className="text-sm text-[#6B6B6B]">All tasks completed!</p>
+        <p className="text-sm text-text-secondary">All tasks completed!</p>
       ) : (
         <>
           {/* Task list with placeholder times */}
           <ul className="space-y-3 mb-4">
             {upcoming.map((task, index) => (
               <li key={task.id} className="flex items-start gap-3">
-                <span className="text-xs text-[#6B6B6B] mt-0.5 w-16 shrink-0">
+                <span className="text-xs text-text-secondary mt-0.5 w-16 shrink-0">
                   {PLACEHOLDER_TIMES[index] ?? PLACEHOLDER_TIMES[0]}
                 </span>
-                <span className="text-sm text-[#1A1A1A] leading-snug line-clamp-1">
+                <span className="text-sm text-text-primary leading-snug line-clamp-1">
                   {task.description}
                 </span>
               </li>
@@ -60,7 +60,7 @@ export default function UpcomingCard({
           {/* Add to calendar button */}
           <button
             type="button"
-            className="w-full rounded-md border border-dark-border py-1.5 text-xs text-[#6B6B6B] hover:bg-dark-surface hover:text-[#1A1A1A] transition-colors"
+            className="w-full rounded-md border border-dark-border py-1.5 text-xs text-text-secondary hover:bg-dark-surface hover:text-text-primary transition-colors"
           >
             + Add to calendar
           </button>

@@ -52,11 +52,11 @@ export default function ProgressRing({
             cy={CENTER}
             r={RADIUS}
             fill="none"
-            stroke="#E8E4DF"
+            stroke="var(--color-border)"
             strokeWidth={STROKE_WIDTH}
           />
         </svg>
-        <p className="text-sm text-[#6B6B6B]">No tasks yet</p>
+        <p className="text-sm text-text-secondary">No tasks yet</p>
       </div>
     );
   }
@@ -86,7 +86,7 @@ export default function ProgressRing({
             cy={CENTER}
             r={RADIUS}
             fill="none"
-            stroke="#E8E4DF"
+            stroke="var(--color-border)"
             strokeWidth={STROKE_WIDTH}
           />
           {/* Segment arcs */}
@@ -108,7 +108,7 @@ export default function ProgressRing({
         {/* Centered percentage text */}
         <div className="absolute inset-0 flex items-center justify-center">
           <span
-            className="text-2xl font-bold text-[#1A1A1A]"
+            className="text-2xl font-bold text-text-primary"
             data-testid="progress-percent"
           >
             {percent}%
@@ -125,7 +125,7 @@ export default function ProgressRing({
         ].map((item) => (
           <div
             key={item.label}
-            className="flex items-center gap-1.5 text-xs text-[#6B6B6B]"
+            className="flex items-center gap-1.5 text-xs text-text-secondary"
           >
             <span
               className={`inline-block h-2.5 w-2.5 rounded-full ${item.color}`}
@@ -138,7 +138,7 @@ export default function ProgressRing({
       </div>
 
       {/* Summary line */}
-      <p className="text-sm text-[#6B6B6B]" data-testid="progress-summary">
+      <p className="text-sm text-text-secondary" data-testid="progress-summary">
         {completed} of {total} tasks completed
       </p>
     </div>

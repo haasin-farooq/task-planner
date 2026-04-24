@@ -55,7 +55,7 @@ function InsightCard({ insight }: { insight: BehavioralInsight }) {
   const config = INSIGHT_TYPE_CONFIG[insight.type];
 
   return (
-    <li className="rounded-lg border border-[#E8E4DF] bg-white p-4">
+    <li className="rounded-lg border border-dark-border bg-dark-card p-4">
       <div className="flex items-start gap-3">
         <div
           className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
@@ -70,7 +70,7 @@ function InsightCard({ insight }: { insight: BehavioralInsight }) {
           >
             {config.label}
           </span>
-          <p className="mt-1 text-sm text-[#1A1A1A] leading-relaxed">
+          <p className="mt-1 text-sm text-text-primary leading-relaxed">
             {insight.text}
           </p>
         </div>
@@ -82,9 +82,6 @@ function InsightCard({ insight }: { insight: BehavioralInsight }) {
 /**
  * Insights Panel — displays up to 5 natural language behavioral insight cards.
  *
- * Shows a low-data state when totalCompleted < 10.
- * Uses warm editorial design with cream backgrounds and orange accents.
- *
  * Requirements: 5.5, 5.6, 9.1
  */
 export default function InsightsPanel({
@@ -94,7 +91,7 @@ export default function InsightsPanel({
   if (totalCompleted < 10) {
     return (
       <section aria-label="Behavioral Insights">
-        <h3 className="font-serif text-xl font-semibold text-[#1A1A1A] mb-3">
+        <h3 className="font-serif text-xl font-semibold text-text-primary mb-3">
           Behavioral Insights
         </h3>
         <LowDataState
@@ -112,14 +109,11 @@ export default function InsightsPanel({
   if (displayedInsights.length === 0) {
     return (
       <section aria-label="Behavioral Insights">
-        <h3 className="font-serif text-xl font-semibold text-[#1A1A1A] mb-3">
+        <h3 className="font-serif text-xl font-semibold text-text-primary mb-3">
           Behavioral Insights
         </h3>
-        <div
-          className="rounded-lg border border-[#E8E4DF] p-6 text-center"
-          style={{ backgroundColor: "#FFF8F0" }}
-        >
-          <p className="text-sm text-[#6B6B6B]">
+        <div className="rounded-lg border border-dark-border p-6 text-center bg-dark-surface">
+          <p className="text-sm text-text-secondary">
             No patterns detected yet. Keep completing tasks and insights will
             appear as trends emerge.
           </p>
@@ -130,13 +124,10 @@ export default function InsightsPanel({
 
   return (
     <section aria-label="Behavioral Insights">
-      <h3 className="font-serif text-xl font-semibold text-[#1A1A1A] mb-3">
+      <h3 className="font-serif text-xl font-semibold text-text-primary mb-3">
         Behavioral Insights
       </h3>
-      <ul
-        className="flex flex-col gap-3 rounded-lg p-5 border border-[#E8E4DF]"
-        style={{ backgroundColor: "#FFF8F0" }}
-      >
+      <ul className="flex flex-col gap-3 rounded-lg p-5 border border-dark-border bg-dark-surface">
         {displayedInsights.map((insight, index) => (
           <InsightCard
             key={`${insight.type}-${insight.category}-${index}`}

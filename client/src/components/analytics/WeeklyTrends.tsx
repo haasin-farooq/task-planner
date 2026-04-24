@@ -29,7 +29,7 @@ export default function WeeklyTrends({
   if (weeksOfData < 2) {
     return (
       <section aria-label="Weekly Behavior Trends">
-        <h2 className="mb-4 font-serif text-xl font-semibold text-gray-800">
+        <h2 className="mb-4 font-serif text-xl font-semibold text-text-primary">
           Weekly Behavior Trends
         </h2>
         <LowDataState
@@ -60,13 +60,13 @@ export default function WeeklyTrends({
 
   return (
     <section aria-label="Weekly Behavior Trends">
-      <h2 className="mb-4 font-serif text-xl font-semibold text-gray-800">
+      <h2 className="mb-4 font-serif text-xl font-semibold text-text-primary">
         Weekly Behavior Trends
       </h2>
 
       <div className="space-y-6">
         <div>
-          <h3 className="mb-2 text-sm font-medium text-gray-600">
+          <h3 className="mb-2 text-sm font-medium text-text-secondary">
             Tasks Completed per Week
           </h3>
           <TrendChart
@@ -78,7 +78,7 @@ export default function WeeklyTrends({
         </div>
 
         <div>
-          <h3 className="mb-2 text-sm font-medium text-gray-600">
+          <h3 className="mb-2 text-sm font-medium text-text-secondary">
             Total Time per Week
           </h3>
           <TrendChart
@@ -90,7 +90,7 @@ export default function WeeklyTrends({
         </div>
 
         <div>
-          <h3 className="mb-2 text-sm font-medium text-gray-600">
+          <h3 className="mb-2 text-sm font-medium text-text-secondary">
             Actual vs Estimated Time per Week
           </h3>
           <TrendChart

@@ -16,23 +16,12 @@ export interface BarChartProps {
   layout?: "horizontal" | "vertical";
 }
 
-/** Warm editorial color tokens matching the project design system. */
-const COLORS = {
-  highlighted: "#E8734A", // accent orange
-  normal: "#9C9590", // warm gray
-  grid: "#E8E4DF", // dark-border
-  axisText: "#6B6B6B",
-  tooltipBg: "#FFFFFF",
-  tooltipBorder: "#E8E4DF",
-};
-
 /**
  * A thin wrapper around Recharts BarChart styled with the warm editorial
  * design system. Renders inside a ResponsiveContainer so it adapts to its
  * parent width automatically.
  *
- * Bars are colored with the orange accent when `highlight` is true, or warm
- * gray otherwise. Supports both horizontal and vertical layouts.
+ * Uses CSS variables for theme-aware colors.
  *
  * Requirements: 4.1, 10.2, 10.5, 11.1
  */
@@ -54,7 +43,7 @@ export default function BarChart({
     <div
       aria-label={ariaLabel}
       role="img"
-      className="w-full rounded-lg border border-[#E8E4DF] bg-white p-4"
+      className="w-full rounded-lg border border-dark-border bg-dark-card p-4"
     >
       <ResponsiveContainer width="100%" height={height}>
         <RechartsBarChart
@@ -67,16 +56,16 @@ export default function BarChart({
               <XAxis
                 type="number"
                 domain={maxValue != null ? [0, maxValue] : undefined}
-                tick={{ fontSize: 12, fill: COLORS.axisText }}
+                tick={{ fontSize: 12, fill: "var(--color-text-secondary)" }}
                 tickLine={false}
-                axisLine={{ stroke: COLORS.grid }}
+                axisLine={{ stroke: "var(--color-border)" }}
               />
               <YAxis
                 type="category"
                 dataKey="label"
-                tick={{ fontSize: 12, fill: COLORS.axisText }}
+                tick={{ fontSize: 12, fill: "var(--color-text-secondary)" }}
                 tickLine={false}
-                axisLine={{ stroke: COLORS.grid }}
+                axisLine={{ stroke: "var(--color-border)" }}
                 width={75}
               />
             </>
@@ -84,15 +73,15 @@ export default function BarChart({
             <>
               <XAxis
                 dataKey="label"
-                tick={{ fontSize: 12, fill: COLORS.axisText }}
+                tick={{ fontSize: 12, fill: "var(--color-text-secondary)" }}
                 tickLine={false}
-                axisLine={{ stroke: COLORS.grid }}
+                axisLine={{ stroke: "var(--color-border)" }}
               />
               <YAxis
                 domain={maxValue != null ? [0, maxValue] : undefined}
-                tick={{ fontSize: 12, fill: COLORS.axisText }}
+                tick={{ fontSize: 12, fill: "var(--color-text-secondary)" }}
                 tickLine={false}
-                axisLine={{ stroke: COLORS.grid }}
+                axisLine={{ stroke: "var(--color-border)" }}
               />
             </>
           )}
@@ -100,20 +89,24 @@ export default function BarChart({
           <Tooltip
             formatter={tooltipFormatter}
             contentStyle={{
-              backgroundColor: COLORS.tooltipBg,
-              border: `1px solid ${COLORS.tooltipBorder}`,
+              backgroundColor: "var(--color-card)",
+              border: "1px solid var(--color-border)",
               borderRadius: 8,
               fontSize: 13,
+              color: "var(--color-text-primary)",
             }}
-            labelStyle={{ color: COLORS.axisText, fontWeight: 600 }}
-            cursor={{ fill: "rgba(232, 228, 223, 0.3)" }}
+            labelStyle={{
+              color: "var(--color-text-secondary)",
+              fontWeight: 600,
+            }}
+            cursor={{ fill: "rgba(232, 228, 223, 0.15)" }}
           />
 
           <Bar dataKey="value" radius={[4, 4, 0, 0]}>
             {data.map((entry, index) => (
               <Cell
                 key={`cell-${index}`}
-                fill={entry.highlight ? COLORS.highlighted : COLORS.normal}
+                fill={entry.highlight ? "var(--color-accent)" : "#9C9590"}
               />
             ))}
           </Bar>
