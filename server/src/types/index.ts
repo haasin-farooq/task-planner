@@ -99,6 +99,10 @@ export interface CompletionRecord {
   taskId: string;
   userId: string;
   description: string;
+  /** The AI-assigned category name (from task analysis). When provided, used directly instead of keyword normalization. */
+  category?: string | null;
+  /** The category_id foreign key (from task analysis). When provided, used directly for completion_history. */
+  categoryId?: number | null;
   /** minutes */
   estimatedTime: number;
   /** minutes */

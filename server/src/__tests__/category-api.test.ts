@@ -418,6 +418,15 @@ describe("PATCH /api/categories/:categoryId", () => {
 
 describe("POST /api/tasks/analyze", () => {
   it("includes categoryConfidence per task in the response (Req 14.3)", async () => {
+    // Create a category so the foreign key is valid
+    db.prepare("INSERT OR IGNORE INTO users (id) VALUES (?)").run("test-user");
+    const catResult = db
+      .prepare(
+        "INSERT INTO categories (name, user_id, status, created_by) VALUES ('Development', 'test-user', 'active', 'llm')",
+      )
+      .run();
+    const catId = Number(catResult.lastInsertRowid);
+
     // Build an app with a mock analyzer that returns categoryConfidence
     const mockAnalyzer = {
       analyze: async () => ({
@@ -435,7 +444,7 @@ describe("POST /api/tasks/analyze", () => {
               dependsOn: [],
             },
             category: "Development",
-            categoryId: 1,
+            categoryId: catId,
             categoryConfidence: 0.85,
           },
         ],

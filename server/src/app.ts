@@ -55,6 +55,8 @@ interface TaskRow {
   effort_percentage: number | null;
   difficulty_level: number | null;
   estimated_time: number | null;
+  category: string | null;
+  category_id: number | null;
   is_completed: number;
   actual_time: number | null;
   completed_at: string | null;
@@ -505,8 +507,8 @@ export function createApp(deps: AppDependencies): express.Express {
 
         const insertTask = db.prepare(
           `INSERT INTO tasks (id, session_id, description, raw_text, is_ambiguous,
-         priority, effort_percentage, difficulty_level, estimated_time)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         priority, effort_percentage, difficulty_level, estimated_time, category, category_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         );
 
         const insertDep = db.prepare(
@@ -525,6 +527,8 @@ export function createApp(deps: AppDependencies): express.Express {
               task.metrics.effortPercentage,
               task.metrics.difficultyLevel,
               task.metrics.estimatedTime,
+              task.category ?? null,
+              task.categoryId ?? null,
             );
 
             for (const depId of task.metrics.dependsOn) {
@@ -650,6 +654,8 @@ export function createApp(deps: AppDependencies): express.Express {
             taskId,
             userId: sessionRow.user_id,
             description: taskRow.description,
+            category: taskRow.category ?? undefined,
+            categoryId: taskRow.category_id ?? undefined,
             estimatedTime: taskRow.estimated_time ?? 30,
             actualTime,
             difficultyLevel: taskRow.difficulty_level ?? 3,
