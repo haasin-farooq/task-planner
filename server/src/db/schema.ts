@@ -135,6 +135,40 @@ function hasCompositeUniqueConstraint(
 }
 
 /**
+ * Ensure all columns from the dynamic-ai-categories migration exist on the
+ * categories table. This handles the case where the table was already migrated
+ * by the ai-category-assignment spec (which added user_id) but is missing
+ * columns added by the dynamic-ai-categories spec (updated_at, status, etc.).
+ */
+function ensureDynamicCategoryColumns(
+  db: import("better-sqlite3").Database,
+): void {
+  if (!columnExists(db, "categories", "status")) {
+    db.exec(
+      "ALTER TABLE categories ADD COLUMN status TEXT NOT NULL DEFAULT 'active'",
+    );
+  }
+  if (!columnExists(db, "categories", "created_by")) {
+    db.exec(
+      "ALTER TABLE categories ADD COLUMN created_by TEXT NOT NULL DEFAULT 'system'",
+    );
+  }
+  if (!columnExists(db, "categories", "merged_into_category_id")) {
+    db.exec(
+      "ALTER TABLE categories ADD COLUMN merged_into_category_id INTEGER DEFAULT NULL",
+    );
+  }
+  if (!columnExists(db, "categories", "updated_at")) {
+    db.exec(
+      "ALTER TABLE categories ADD COLUMN updated_at TIMESTAMP DEFAULT NULL",
+    );
+    db.exec(
+      "UPDATE categories SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL",
+    );
+  }
+}
+
+/**
  * Migrate the categories table from the old schema (global UNIQUE(name))
  * to the new schema (per-user UNIQUE(user_id, name) with lifecycle columns).
  *
@@ -148,7 +182,10 @@ function hasCompositeUniqueConstraint(
  */
 function migrateCategoriesTable(db: import("better-sqlite3").Database): void {
   if (!categoriesNeedsMigration(db)) {
-    // Already migrated — ensure defaults are set for any rows missing them
+    // user_id already exists, but we may still need to add columns from the
+    // dynamic-ai-categories migration (updated_at, merged_into_category_id, etc.)
+    ensureDynamicCategoryColumns(db);
+    // Ensure defaults are set for any rows missing them
     backfillCategoryDefaults(db);
     return;
   }
