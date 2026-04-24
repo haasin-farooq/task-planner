@@ -12,7 +12,6 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { AICategoryAssigner } from "../ai-category-assigner.js";
-import { normalize } from "../../utils/category-normalizer.js";
 
 // ---------------------------------------------------------------------------
 // Mock OpenAI client helper
@@ -214,11 +213,11 @@ describe("AICategoryAssigner", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Req 10.1, 10.2 — LLM fails twice → falls back to keyword normalizer
+  // Req 10.1, 10.2 — LLM fails twice → falls back to Uncategorized
   // -----------------------------------------------------------------------
 
-  describe("fallback to keyword normalizer (Req 10.1, 10.2)", () => {
-    it("falls back to keyword normalizer when LLM throws on both attempts", async () => {
+  describe("fallback to Uncategorized (Req 10.1, 10.2)", () => {
+    it("falls back to Uncategorized when LLM throws on both attempts", async () => {
       const { client, create } = createMockClient(
         new Error("API rate limit exceeded"),
         new Error("API rate limit exceeded"),
@@ -234,16 +233,16 @@ describe("AICategoryAssigner", () => {
       expect(create).toHaveBeenCalledTimes(2);
       expect(result).toEqual({
         rawLLMCategory: null,
-        finalCategory: normalize(description),
+        finalCategory: "Uncategorized",
         isNew: false,
         confidence: 0.0,
         source: "fallback",
         closestExisting: null,
-        lowConfidence: false,
+        lowConfidence: true,
       });
     });
 
-    it("falls back when LLM returns empty content on both attempts", async () => {
+    it("falls back to Uncategorized when LLM returns empty content on both attempts", async () => {
       const { client, create } = createMockClient(
         { content: "" },
         { content: "" },
@@ -256,12 +255,12 @@ describe("AICategoryAssigner", () => {
       expect(create).toHaveBeenCalledTimes(2);
       expect(result).toEqual({
         rawLLMCategory: null,
-        finalCategory: normalize(description),
+        finalCategory: "Uncategorized",
         isNew: false,
         confidence: 0.0,
         source: "fallback",
         closestExisting: null,
-        lowConfidence: false,
+        lowConfidence: true,
       });
     });
   });
@@ -583,11 +582,11 @@ describe("AICategoryAssigner", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Req 10.4 — "Other" fallback triggers lowConfidence
+  // Req 10.4 — Fallback always triggers lowConfidence
   // -----------------------------------------------------------------------
 
-  describe('"Other" fallback triggers lowConfidence (Req 10.4)', () => {
-    it('sets lowConfidence=true when normalizer produces "Other"', async () => {
+  describe("fallback always triggers lowConfidence (Req 10.4)", () => {
+    it("sets lowConfidence=true when LLM fails completely", async () => {
       const { client } = createMockClient(
         new Error("LLM down"),
         new Error("LLM down"),
@@ -599,13 +598,13 @@ describe("AICategoryAssigner", () => {
         "Development",
       ]);
 
-      expect(result.finalCategory).toBe("Other");
+      expect(result.finalCategory).toBe("Uncategorized");
       expect(result.lowConfidence).toBe(true);
       expect(result.source).toBe("fallback");
       expect(result.confidence).toBe(0.0);
     });
 
-    it("sets lowConfidence=false when normalizer produces a real category", async () => {
+    it("sets lowConfidence=true even for descriptions that would match normalizer keywords", async () => {
       const { client } = createMockClient(
         new Error("LLM down"),
         new Error("LLM down"),
@@ -616,8 +615,8 @@ describe("AICategoryAssigner", () => {
         "Development",
       ]);
 
-      expect(result.finalCategory).toBe("Writing");
-      expect(result.lowConfidence).toBe(false);
+      expect(result.finalCategory).toBe("Uncategorized");
+      expect(result.lowConfidence).toBe(true);
       expect(result.source).toBe("fallback");
     });
   });
@@ -774,7 +773,7 @@ describe("AICategoryAssigner", () => {
 
       expect(create).toHaveBeenCalledTimes(2);
       expect(result.source).toBe("fallback");
-      expect(result.finalCategory).toBe(normalize(description));
+      expect(result.finalCategory).toBe("Uncategorized");
     });
   });
 
@@ -905,11 +904,11 @@ describe("AICategoryAssigner", () => {
   });
 
   // -----------------------------------------------------------------------
-  // 3-word truncation combined with "Other" fallback (Req 5.4, 10.4)
+  // 3-word truncation with Uncategorized fallback (Req 5.4)
   // -----------------------------------------------------------------------
 
-  describe("3-word truncation with Other fallback (Req 5.4, 10.4)", () => {
-    it("sets lowConfidence=true when >3 word truncation falls back to normalizer producing Other", async () => {
+  describe("3-word truncation with Uncategorized fallback (Req 5.4)", () => {
+    it("sets lowConfidence=true when >3 word truncation falls back to Uncategorized", async () => {
       const { client } = createMockClient({
         content: JSON.stringify({
           category: "Extremely Specific Niche Task Category",
@@ -925,7 +924,7 @@ describe("AICategoryAssigner", () => {
       ]);
 
       expect(result.source).toBe("fallback");
-      expect(result.finalCategory).toBe("Other");
+      expect(result.finalCategory).toBe("Uncategorized");
       expect(result.lowConfidence).toBe(true);
       expect(result.rawLLMCategory).toBe(
         "Extremely Specific Niche Task Category",
@@ -1004,7 +1003,7 @@ describe("AICategoryAssigner", () => {
 
       expect(create).toHaveBeenCalledTimes(2);
       expect(result.source).toBe("fallback");
-      expect(result.finalCategory).toBe(normalize(description));
+      expect(result.finalCategory).toBe("Uncategorized");
     });
 
     it("falls back when LLM returns JSON without category field", async () => {
@@ -1120,7 +1119,7 @@ describe("AICategoryAssigner", () => {
       expect(create).toHaveBeenCalledTimes(1); // No retry needed
     });
 
-    it("falls back to normalizer when both attempts return rejected categories", async () => {
+    it("falls back to Uncategorized when both attempts return rejected categories", async () => {
       const { client } = createMockClient(
         {
           content: JSON.stringify({
@@ -1139,8 +1138,9 @@ describe("AICategoryAssigner", () => {
       );
       const assigner = new AICategoryAssigner(client);
       const result = await assigner.assign("read a book", []);
-      // Falls back to normalizer
+      // Falls back to Uncategorized
       expect(result.source).toBe("fallback");
+      expect(result.finalCategory).toBe("Uncategorized");
     });
 
     it("includes rawText in the prompt when provided", async () => {
@@ -1202,6 +1202,190 @@ describe("AICategoryAssigner", () => {
       expect(allContent).toMatch(/task completion/i);
       expect(allContent).toMatch(/general/i);
       expect(allContent).toMatch(/activity.*type/i);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Synonym/alias normalization
+  // -----------------------------------------------------------------------
+
+  describe("synonym/alias normalization", () => {
+    it("normalizes 'Errand' to existing 'Errands'", async () => {
+      const { client } = createMockClient({
+        content: JSON.stringify({
+          category: "Errand",
+          isExisting: false,
+          confidence: 0.85,
+        }),
+      });
+      const assigner = new AICategoryAssigner(client);
+      const result = await assigner.assign("pick up parcel", [
+        "Errands",
+        "Social",
+      ]);
+      expect(result.finalCategory).toBe("Errands");
+      expect(result.isNew).toBe(false);
+    });
+
+    it("normalizes 'Socializing' to 'Social' when Social exists", async () => {
+      const { client } = createMockClient({
+        content: JSON.stringify({
+          category: "Socializing",
+          isExisting: false,
+          confidence: 0.8,
+        }),
+      });
+      const assigner = new AICategoryAssigner(client);
+      const result = await assigner.assign("meet Ali", ["Social", "Errands"]);
+      expect(result.finalCategory).toBe("Social");
+      expect(result.isNew).toBe(false);
+    });
+
+    it("normalizes 'Socializing' to 'Social' even when Social does not exist", async () => {
+      const { client } = createMockClient({
+        content: JSON.stringify({
+          category: "Socializing",
+          isExisting: false,
+          confidence: 0.8,
+        }),
+      });
+      const assigner = new AICategoryAssigner(client);
+      const result = await assigner.assign("meet Ali", ["Errands"]);
+      expect(result.finalCategory).toBe("Social");
+    });
+
+    it("normalizes 'Workout' to 'Exercise'", async () => {
+      const { client } = createMockClient({
+        content: JSON.stringify({
+          category: "Workout",
+          isExisting: false,
+          confidence: 0.85,
+        }),
+      });
+      const assigner = new AICategoryAssigner(client);
+      const result = await assigner.assign("go to gym", []);
+      expect(result.finalCategory).toBe("Exercise");
+    });
+
+    it("normalizes 'Grooming' to 'Personal Care'", async () => {
+      const { client } = createMockClient({
+        content: JSON.stringify({
+          category: "Grooming",
+          isExisting: false,
+          confidence: 0.85,
+        }),
+      });
+      const assigner = new AICategoryAssigner(client);
+      const result = await assigner.assign("trim beard", []);
+      expect(result.finalCategory).toBe("Personal Care");
+    });
+
+    it("applies title case to new categories", async () => {
+      const { client } = createMockClient({
+        content: JSON.stringify({
+          category: "job search",
+          isExisting: false,
+          confidence: 0.9,
+        }),
+      });
+      const assigner = new AICategoryAssigner(client);
+      const result = await assigner.assign("apply for jobs", []);
+      expect(result.finalCategory).toBe("Job Search");
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Fallback uses Uncategorized instead of normalizer
+  // -----------------------------------------------------------------------
+
+  describe("fallback uses Uncategorized instead of normalizer", () => {
+    it("returns 'Uncategorized' when LLM fails completely", async () => {
+      const { client } = createMockClient(
+        new Error("LLM down"),
+        new Error("LLM down"),
+      );
+      const assigner = new AICategoryAssigner(client);
+      const result = await assigner.assign("some random task", []);
+      expect(result.finalCategory).toBe("Uncategorized");
+      expect(result.source).toBe("fallback");
+      expect(result.lowConfidence).toBe(true);
+    });
+
+    it("returns 'Uncategorized' when rejected category retry also fails", async () => {
+      const { client } = createMockClient(
+        {
+          content: JSON.stringify({
+            category: "Task",
+            isExisting: false,
+            confidence: 0.6,
+          }),
+        },
+        {
+          content: JSON.stringify({
+            category: "General",
+            isExisting: false,
+            confidence: 0.5,
+          }),
+        },
+      );
+      const assigner = new AICategoryAssigner(client);
+      const result = await assigner.assign("do something", []);
+      expect(result.finalCategory).toBe("Uncategorized");
+      expect(result.source).toBe("fallback");
+      expect(result.lowConfidence).toBe(true);
+    });
+
+    it("does NOT return keyword-normalizer categories like 'Testing' or 'Writing' as fallback", async () => {
+      const { client } = createMockClient(
+        new Error("LLM down"),
+        new Error("LLM down"),
+      );
+      const assigner = new AICategoryAssigner(client);
+      const result = await assigner.assign("test the feature", []);
+      expect(result.finalCategory).toBe("Uncategorized");
+      expect(result.finalCategory).not.toBe("Testing");
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Weak category filtering
+  // -----------------------------------------------------------------------
+
+  describe("weak category filtering", () => {
+    it("filters out rejected categories from the candidate list sent to LLM", async () => {
+      const capturedCalls: any[] = [];
+      const create = vi.fn().mockImplementation(async (params: any) => {
+        capturedCalls.push(params);
+        return {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  category: "Social",
+                  isExisting: false,
+                  confidence: 0.9,
+                }),
+              },
+            },
+          ],
+        };
+      });
+      const client = { chat: { completions: { create } } } as any;
+      const assigner = new AICategoryAssigner(client);
+      await assigner.assign("meet Ali", [
+        "Social",
+        "Other",
+        "General",
+        "Task Completion",
+      ]);
+      const allContent = capturedCalls[0].messages
+        .map((m: any) => m.content)
+        .join("\n");
+      // "Social" should be in the prompt, but "Other", "General", "Task Completion" should be filtered out
+      expect(allContent).toContain("Social");
+      expect(allContent).not.toContain("- Other");
+      expect(allContent).not.toContain("- General");
+      expect(allContent).not.toContain("- Task Completion");
     });
   });
 });

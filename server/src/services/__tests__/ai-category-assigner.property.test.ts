@@ -337,19 +337,59 @@ describe("Property 3: Category assignment returns correct result for LLM respons
             "life",
             "day",
             "todo",
-            "chore",
-            "chores",
+            "uncategorized",
+            "needs review",
           ]);
           fc.pre(!REJECTED.has(newCategory.toLowerCase().trim()));
+
+          // Skip alias categories — they get normalized to a different name
+          const ALIAS_KEYS = new Set([
+            "errand",
+            "socializing",
+            "socialising",
+            "meeting",
+            "meetings",
+            "workout",
+            "workouts",
+            "gym",
+            "fitness",
+            "grooming",
+            "hygiene",
+            "self care",
+            "self-care",
+            "studying",
+            "study",
+            "education",
+            "coding",
+            "programming",
+            "shopping",
+            "chore",
+            "chores",
+            "housework",
+            "commute",
+            "commuting",
+            "appointment",
+            "appointments",
+          ]);
+          fc.pre(!ALIAS_KEYS.has(newCategory.toLowerCase().trim()));
 
           const client = createMockClientReturning(newCategory, false);
           const assigner = new AICategoryAssigner(client);
           const result = await assigner.assign(description, categories);
 
           // **Validates: Requirements 2.3, 2.6**
-          expect(result.finalCategory).toBe(newCategory);
+          // Title case is applied to new categories
+          const expectedName = newCategory
+            .trim()
+            .split(/\s+/)
+            .map(
+              (w: string) =>
+                w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(),
+            )
+            .join(" ");
+          expect(result.finalCategory).toBe(expectedName);
           expect(result.isNew).toBe(true);
-          expect(result.rawLLMCategory).toBe(newCategory);
+          expect(result.rawLLMCategory).toBe(expectedName);
         },
       ),
       { numRuns: 100 },
@@ -358,21 +398,18 @@ describe("Property 3: Category assignment returns correct result for LLM respons
 });
 
 // ---------------------------------------------------------------------------
-// Property 4: Fallback produces normalizer result with null raw category
+// Property 4: Fallback produces Uncategorized with null raw category
 //
 // For any task description, when the LLM call fails (error, timeout, or empty
-// response) after the retry attempt, the finalCategory SHALL equal the result
-// of normalize(description) from the keyword normalizer, and rawLLMCategory
-// SHALL be null.
+// response) after the retry attempt, the finalCategory SHALL equal
+// "Uncategorized", and rawLLMCategory SHALL be null.
 //
-// Feature: ai-category-assignment, Property 4: Fallback produces normalizer result with null raw category
+// Feature: ai-category-assignment, Property 4: Fallback produces Uncategorized with null raw category
 //
 // Validates: Requirements 3.1, 3.2, 3.3
 // ---------------------------------------------------------------------------
 
-import { normalize } from "../../utils/category-normalizer.js";
-
-describe("Property 4: Fallback produces normalizer result with null raw category", () => {
+describe("Property 4: Fallback produces Uncategorized with null raw category", () => {
   /**
    * Arbitrary for a non-empty task description string.
    * Uses printable ASCII to keep descriptions realistic.
@@ -401,7 +438,7 @@ describe("Property 4: Fallback produces normalizer result with null raw category
   // Test case 1: LLM throws an error on every call
   // -------------------------------------------------------------------------
 
-  it("when LLM always throws an error, rawLLMCategory is null and finalCategory equals normalize(description)", async () => {
+  it("when LLM always throws an error, rawLLMCategory is null and finalCategory equals 'Uncategorized'", async () => {
     await fc.assert(
       fc.asyncProperty(
         descriptionArb,
@@ -417,7 +454,7 @@ describe("Property 4: Fallback produces normalizer result with null raw category
 
           // **Validates: Requirements 3.1, 3.3**
           expect(result.rawLLMCategory).toBeNull();
-          expect(result.finalCategory).toBe(normalize(description));
+          expect(result.finalCategory).toBe("Uncategorized");
           expect(result.isNew).toBe(false);
         },
       ),
@@ -429,7 +466,7 @@ describe("Property 4: Fallback produces normalizer result with null raw category
   // Test case 2: LLM returns empty responses (no content)
   // -------------------------------------------------------------------------
 
-  it("when LLM returns empty responses, rawLLMCategory is null and finalCategory equals normalize(description)", async () => {
+  it("when LLM returns empty responses, rawLLMCategory is null and finalCategory equals 'Uncategorized'", async () => {
     await fc.assert(
       fc.asyncProperty(
         descriptionArb,
@@ -445,7 +482,7 @@ describe("Property 4: Fallback produces normalizer result with null raw category
 
           // **Validates: Requirements 3.2, 3.3**
           expect(result.rawLLMCategory).toBeNull();
-          expect(result.finalCategory).toBe(normalize(description));
+          expect(result.finalCategory).toBe("Uncategorized");
           expect(result.isNew).toBe(false);
         },
       ),
@@ -457,7 +494,7 @@ describe("Property 4: Fallback produces normalizer result with null raw category
   // Test case 3: LLM returns null content (simulating timeout / empty body)
   // -------------------------------------------------------------------------
 
-  it("when LLM returns null content, rawLLMCategory is null and finalCategory equals normalize(description)", async () => {
+  it("when LLM returns null content, rawLLMCategory is null and finalCategory equals 'Uncategorized'", async () => {
     await fc.assert(
       fc.asyncProperty(
         descriptionArb,
@@ -473,7 +510,7 @@ describe("Property 4: Fallback produces normalizer result with null raw category
 
           // **Validates: Requirements 3.2, 3.3**
           expect(result.rawLLMCategory).toBeNull();
-          expect(result.finalCategory).toBe(normalize(description));
+          expect(result.finalCategory).toBe("Uncategorized");
           expect(result.isNew).toBe(false);
         },
       ),
@@ -593,10 +630,41 @@ describe("Property 5: Category Name Validation — Three Word Limit", () => {
             "life",
             "day",
             "todo",
-            "chore",
-            "chores",
+            "uncategorized",
+            "needs review",
           ]);
           fc.pre(!REJECTED.has(proposedName.toLowerCase().trim()));
+
+          // Skip alias categories — they get normalized to a different name
+          const ALIAS_KEYS = new Set([
+            "errand",
+            "socializing",
+            "socialising",
+            "meeting",
+            "meetings",
+            "workout",
+            "workouts",
+            "gym",
+            "fitness",
+            "grooming",
+            "hygiene",
+            "self care",
+            "self-care",
+            "studying",
+            "study",
+            "education",
+            "coding",
+            "programming",
+            "shopping",
+            "chore",
+            "chores",
+            "housework",
+            "commute",
+            "commuting",
+            "appointment",
+            "appointments",
+          ]);
+          fc.pre(!ALIAS_KEYS.has(proposedName.toLowerCase().trim()));
 
           const client = createMockClientProposingNew(proposedName);
           const assigner = new AICategoryAssigner(client);
@@ -654,20 +722,59 @@ describe("Property 5: Category Name Validation — Three Word Limit", () => {
             "life",
             "day",
             "todo",
-            "chore",
-            "chores",
+            "uncategorized",
+            "needs review",
           ]);
           fc.pre(!REJECTED.has(proposedName.toLowerCase().trim()));
+
+          // Skip alias categories — they get normalized to a different name
+          const ALIAS_KEYS = new Set([
+            "errand",
+            "socializing",
+            "socialising",
+            "meeting",
+            "meetings",
+            "workout",
+            "workouts",
+            "gym",
+            "fitness",
+            "grooming",
+            "hygiene",
+            "self care",
+            "self-care",
+            "studying",
+            "study",
+            "education",
+            "coding",
+            "programming",
+            "shopping",
+            "chore",
+            "chores",
+            "housework",
+            "commute",
+            "commuting",
+            "appointment",
+            "appointments",
+          ]);
+          fc.pre(!ALIAS_KEYS.has(proposedName.toLowerCase().trim()));
 
           const client = createMockClientProposingNew(proposedName);
           const assigner = new AICategoryAssigner(client);
           const result = await assigner.assign(description, existingCategories);
 
           // **Validates: Requirements 5.4**
-          // Short names should pass through unchanged
-          expect(result.finalCategory).toBe(proposedName);
+          // Short names should pass through with title case applied
+          const expectedName = proposedName
+            .trim()
+            .split(/\s+/)
+            .map(
+              (w: string) =>
+                w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(),
+            )
+            .join(" ");
+          expect(result.finalCategory).toBe(expectedName);
           expect(result.isNew).toBe(true);
-          expect(result.rawLLMCategory).toBe(proposedName);
+          expect(result.rawLLMCategory).toBe(expectedName);
         },
       ),
       { numRuns: 100 },
@@ -1020,7 +1127,7 @@ describe("Property 9: Fallback Produces Correct Metadata", () => {
 // **Validates: Requirements 10.4**
 // ---------------------------------------------------------------------------
 
-describe("Property 10: 'Other' Fallback Triggers Low Confidence Flag", () => {
+describe("Property 10: Fallback Always Triggers Low Confidence Flag", () => {
   /**
    * All keywords used by the category normalizer. Any description containing
    * one of these (case-insensitive) will NOT normalize to "Other".
@@ -1140,7 +1247,7 @@ describe("Property 10: 'Other' Fallback Triggers Low Confidence Flag", () => {
 
   /**
    * Creates a mock OpenAI client that always fails (throws an error),
-   * forcing the assigner to use the fallback normalizer.
+   * forcing the assigner to use the fallback.
    */
   function createFailingMockClient() {
     const create = vi.fn().mockRejectedValue(new Error("LLM unavailable"));
@@ -1148,10 +1255,10 @@ describe("Property 10: 'Other' Fallback Triggers Low Confidence Flag", () => {
   }
 
   // -------------------------------------------------------------------------
-  // Core property: descriptions normalizing to "Other" produce lowConfidence=true
+  // Core property: ALL fallback results produce lowConfidence=true and "Uncategorized"
   // -------------------------------------------------------------------------
 
-  it("when fallback normalizer produces 'Other', lowConfidence is true", async () => {
+  it("when fallback is used, lowConfidence is always true and finalCategory is 'Uncategorized'", async () => {
     await fc.assert(
       fc.asyncProperty(
         otherDescriptionArb,
@@ -1163,7 +1270,7 @@ describe("Property 10: 'Other' Fallback Triggers Low Confidence Flag", () => {
 
           // Confirm we are in the fallback path
           expect(result.source).toBe("fallback");
-          expect(result.finalCategory).toBe("Other");
+          expect(result.finalCategory).toBe("Uncategorized");
 
           // **Validates: Requirements 10.4**
           expect(result.lowConfidence).toBe(true);
@@ -1174,14 +1281,14 @@ describe("Property 10: 'Other' Fallback Triggers Low Confidence Flag", () => {
   });
 
   // -------------------------------------------------------------------------
-  // Contrast: descriptions that normalize to a non-"Other" category via
-  // fallback should NOT have lowConfidence=true
+  // Contrast: even descriptions with normalizer keywords get Uncategorized
   // -------------------------------------------------------------------------
 
-  it("when fallback normalizer produces a non-'Other' category, lowConfidence is false", async () => {
+  it("when fallback is used with keyword-matching descriptions, lowConfidence is still true", async () => {
     /**
-     * Arbitrary that generates descriptions containing a known keyword,
-     * ensuring the normalizer produces a category other than "Other".
+     * Arbitrary that generates descriptions containing a known keyword.
+     * Previously these would have gotten a normalizer category; now they
+     * all get "Uncategorized".
      */
     const knownKeywordArb = fc.constantFrom(
       "write a poem",
@@ -1206,10 +1313,10 @@ describe("Property 10: 'Other' Fallback Triggers Low Confidence Flag", () => {
 
           // Confirm we are in the fallback path
           expect(result.source).toBe("fallback");
-          expect(result.finalCategory).not.toBe("Other");
+          expect(result.finalCategory).toBe("Uncategorized");
 
-          // Non-"Other" fallback should NOT flag low confidence
-          expect(result.lowConfidence).toBe(false);
+          // ALL fallback results now have lowConfidence=true
+          expect(result.lowConfidence).toBe(true);
         },
       ),
       { numRuns: 50 },

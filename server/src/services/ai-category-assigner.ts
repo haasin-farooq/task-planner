@@ -1,17 +1,19 @@
 /**
  * AICategoryAssigner — assigns a category to a task description using an LLM,
- * preferring existing categories and falling back to the keyword normalizer.
+ * preferring existing categories and falling back to "Uncategorized" sentinel.
  *
  * Responsibilities:
  * - Send task description + existing category list to the LLM
  * - Instruct LLM to prefer existing categories over proposing new ones
  * - Frame categories as activity-type categories (what the task is about)
  * - Reject generic/process labels and retry with stronger prompt
+ * - Filter weak/rejected categories from the candidate list sent to the LLM
+ * - Normalize synonyms and near-duplicates via alias map
  * - Enforce naming constraints on new categories (≤3 words, title-cased, general-purpose)
  * - When >20 categories exist, emphasize reuse even more strongly
  * - Parse JSON response: { "category": "...", "isExisting": true/false, "confidence": 0.0-1.0 }
  * - Retry once with stricter prompt on parse failure
- * - Fall back to keyword normalizer on total failure
+ * - Fall back to "Uncategorized" on total failure
  * - Return confidence scores, source tracking, and low-confidence flags
  *
  * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 5.1, 5.2, 5.3, 5.4,
@@ -19,7 +21,6 @@
  */
 
 import OpenAI from "openai";
-import { normalize } from "../utils/category-normalizer.js";
 
 // ---------------------------------------------------------------------------
 // Result interface
@@ -77,12 +78,104 @@ export const REJECTED_CATEGORIES = new Set([
   "life",
   "day",
   "todo",
-  "chore",
-  "chores",
+  "uncategorized",
+  "needs review",
 ]);
 
 export function isRejectedCategory(name: string): boolean {
   return REJECTED_CATEGORIES.has(name.toLowerCase().trim());
+}
+
+// ---------------------------------------------------------------------------
+// Weak category filtering
+// ---------------------------------------------------------------------------
+
+export function filterWeakCategories(categories: string[]): string[] {
+  return categories.filter(
+    (c) => !isRejectedCategory(c) && c.toLowerCase() !== "uncategorized",
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Synonym / alias normalization
+// ---------------------------------------------------------------------------
+
+export const CATEGORY_ALIASES: Record<string, string> = {
+  errand: "Errands",
+  socializing: "Social",
+  socialising: "Social",
+  meeting: "Social",
+  meetings: "Social",
+  workout: "Exercise",
+  workouts: "Exercise",
+  gym: "Exercise",
+  fitness: "Exercise",
+  grooming: "Personal Care",
+  hygiene: "Personal Care",
+  "self care": "Personal Care",
+  "self-care": "Personal Care",
+  studying: "Learning",
+  study: "Learning",
+  education: "Learning",
+  coding: "Development",
+  programming: "Development",
+  shopping: "Errands",
+  chore: "Errands",
+  chores: "Errands",
+  housework: "Cleaning",
+  commute: "Travel",
+  commuting: "Travel",
+  appointment: "Errands",
+  appointments: "Errands",
+};
+
+export function normalizeAlias(
+  category: string,
+  existingCategories: string[],
+): string {
+  const lower = category.toLowerCase().trim();
+
+  // Check alias map first
+  const alias = Object.prototype.hasOwnProperty.call(CATEGORY_ALIASES, lower)
+    ? CATEGORY_ALIASES[lower]
+    : undefined;
+  if (alias) {
+    // If the alias target exists in existing categories, use it
+    const existingMatch = existingCategories.find(
+      (c) => c.toLowerCase() === alias.toLowerCase(),
+    );
+    if (existingMatch) return existingMatch;
+    return alias;
+  }
+
+  // Check for singular/plural match against existing categories
+  // "Errand" matches "Errands", "Meeting" matches "Meetings"
+  const existingLower = existingCategories.map((c) => ({
+    original: c,
+    lower: c.toLowerCase(),
+  }));
+  for (const existing of existingLower) {
+    if (existing.lower === lower + "s" || existing.lower + "s" === lower) {
+      return existing.original;
+    }
+    if (existing.lower === lower + "ing" || existing.lower + "ing" === lower) {
+      return existing.original;
+    }
+  }
+
+  return category;
+}
+
+// ---------------------------------------------------------------------------
+// Title-case normalization
+// ---------------------------------------------------------------------------
+
+export function toTitleCase(str: string): string {
+  return str
+    .trim()
+    .split(/\s+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
 }
 
 // ---------------------------------------------------------------------------
@@ -168,10 +261,12 @@ export class AICategoryAssigner {
   /**
    * Assign a category to a task description.
    *
-   * 1. Call the LLM with the description and existing categories.
+   * 1. Call the LLM with the description and filtered existing categories.
    * 2. On parse failure, retry once with a stricter prompt.
    * 3. Reject generic/process categories and retry with stronger prompt.
-   * 4. On total failure, fall back to the keyword normalizer.
+   * 4. Apply alias normalization to resolve synonyms/near-duplicates.
+   * 5. Apply title-case normalization to new categories.
+   * 6. On total failure, fall back to "Uncategorized" sentinel.
    */
   async assign(
     description: string,
@@ -179,10 +274,13 @@ export class AICategoryAssigner {
     activeCategoryCount?: number,
     rawText?: string,
   ): Promise<CategoryAssignmentResult> {
+    // Filter weak categories from the list sent to the LLM
+    const filteredCategories = filterWeakCategories(existingCategories);
+
     // First attempt
     let result = await this.callLLM(
       description,
-      existingCategories,
+      filteredCategories,
       false,
       activeCategoryCount,
       rawText,
@@ -192,27 +290,26 @@ export class AICategoryAssigner {
     if (result === null) {
       result = await this.callLLM(
         description,
-        existingCategories,
+        filteredCategories,
         true,
         activeCategoryCount,
         rawText,
       );
     }
 
-    // Both attempts failed — fall back to keyword normalizer (Req 10.1, 10.2)
+    // Both attempts failed — fall back to "Uncategorized" (Req 10.1, 10.2)
     if (result === null) {
       console.warn(
         `[AICategoryAssigner] LLM failed after retry for description: "${description.slice(0, 80)}". Falling back to keyword normalizer.`,
       );
-      const fallbackCategory = normalize(description);
       return {
         rawLLMCategory: null,
-        finalCategory: fallbackCategory,
+        finalCategory: "Uncategorized",
         isNew: false,
         confidence: 0.0,
         source: "fallback",
         closestExisting: null,
-        lowConfidence: fallbackCategory === "Other",
+        lowConfidence: true,
       };
     }
 
@@ -221,7 +318,7 @@ export class AICategoryAssigner {
       const rejectedName = result.category;
       const retryResult = await this.callLLMWithRejection(
         description,
-        existingCategories,
+        filteredCategories,
         rejectedName,
         activeCategoryCount,
         rawText,
@@ -230,19 +327,18 @@ export class AICategoryAssigner {
       if (retryResult !== null && !isRejectedCategory(retryResult.category)) {
         result = retryResult;
       } else {
-        // Both attempts returned rejected categories — fall back
+        // Both attempts returned rejected categories — fall back to "Uncategorized"
         console.warn(
           `[AICategoryAssigner] LLM returned rejected category "${rejectedName}" and retry also failed. Falling back to keyword normalizer.`,
         );
-        const fallbackCategory = normalize(description);
         return {
           rawLLMCategory: rejectedName,
-          finalCategory: fallbackCategory,
+          finalCategory: "Uncategorized",
           isNew: false,
           confidence: 0.0,
           source: "fallback",
           closestExisting: null,
-          lowConfidence: fallbackCategory === "Other",
+          lowConfidence: true,
         };
       }
     }
@@ -251,7 +347,7 @@ export class AICategoryAssigner {
     if (result.confidence < 0.3) {
       const lowConfRetry = await this.callLLMWithLowConfidence(
         description,
-        existingCategories,
+        filteredCategories,
         activeCategoryCount,
         rawText,
       );
@@ -260,7 +356,11 @@ export class AICategoryAssigner {
       }
     }
 
+    // Apply alias normalization (after rejected check, before ≤3 word check)
+    result.category = normalizeAlias(result.category, existingCategories);
+
     // Enforce ≤3 word naming rule on new categories (Req 5.4)
+    // Use original existingCategories for isNew determination
     const existingSet = new Set(existingCategories.map((c) => c.toLowerCase()));
     const isNew = !existingSet.has(result.category.toLowerCase());
 
@@ -283,21 +383,25 @@ export class AICategoryAssigner {
           };
         }
 
-        // Otherwise fall back to normalizer
+        // Otherwise fall back to "Uncategorized"
         console.warn(
           `[AICategoryAssigner] LLM proposed >3 word category "${result.category}", truncated "${truncated}" does not match existing. Falling back.`,
         );
-        const fallbackCategory = normalize(description);
         return {
           rawLLMCategory: result.category,
-          finalCategory: fallbackCategory,
+          finalCategory: "Uncategorized",
           isNew: false,
           confidence: 0.0,
           source: "fallback",
           closestExisting: null,
-          lowConfidence: fallbackCategory === "Other",
+          lowConfidence: true,
         };
       }
+    }
+
+    // Apply title-case normalization to new categories only
+    if (isNew) {
+      result.category = toTitleCase(result.category);
     }
 
     // Determine closestExisting for low-confidence new categories (Req 6.4)
@@ -444,13 +548,15 @@ Return ONLY valid JSON: { "category": "...", "isExisting": true/false, "confiden
           ? existingCategories.join(", ")
           : "(none)";
 
-      const prompt = `Your confidence was very low. Please reconsider and choose the best fitting activity-type category.
+      const prompt = `Your confidence was very low. Think about what TYPE OF ACTIVITY this task represents for long-term time analytics.
 
 Task: "${description}"
 ${rawText ? `Original text: "${rawText}"` : ""}
 Existing categories: ${categoryList}
 
-Categories should describe the TYPE OF ACTIVITY: Social, Errands, Reading, Learning, Personal Care, Health, Exercise, Admin, Planning, Communication, Development, Writing, Cooking, Finance, Shopping, Cleaning, Travel
+Ask yourself: "If I were tracking how I spend my time across weeks, what activity bucket would this task fall into?"
+
+Categories should be useful for answering: "How much time do I spend on Social vs Errands vs Learning vs Personal Care?"
 
 Return ONLY valid JSON: { "category": "...", "isExisting": true/false, "confidence": 0.0-1.0 }`;
 
