@@ -9,6 +9,12 @@ export interface MetricsDisplayProps {
   completedTaskIds: Set<string>;
   /** Called when the user marks a task as complete. */
   onTaskComplete?: (taskId: string) => void;
+  // Timer props
+  timerState?: { taskId: string; status: "running" | "paused" } | null;
+  elapsedMs?: number;
+  onStartTimer?: (taskId: string) => void;
+  onPauseTimer?: () => void;
+  onResumeTimer?: () => void;
 }
 
 /**
@@ -26,6 +32,11 @@ export default function MetricsDisplay({
   tasks,
   completedTaskIds,
   onTaskComplete,
+  timerState,
+  elapsedMs,
+  onStartTimer,
+  onPauseTimer,
+  onResumeTimer,
 }: MetricsDisplayProps) {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
@@ -93,6 +104,15 @@ export default function MetricsDisplay({
                 isCompleted={isCompleted}
                 onMarkComplete={onTaskComplete}
                 allTasks={tasks}
+                timerStatus={
+                  timerState?.taskId === task.id ? timerState.status : "none"
+                }
+                elapsedMs={
+                  timerState?.taskId === task.id ? (elapsedMs ?? 0) : 0
+                }
+                onStartTimer={onStartTimer}
+                onPauseTimer={onPauseTimer}
+                onResumeTimer={onResumeTimer}
               />
 
               {/* Dependency detail list — preserved from original */}

@@ -4,6 +4,7 @@ import CategoryBadge from "./CategoryBadge";
 import EffortIndicator from "./EffortIndicator";
 import DifficultyRating from "./DifficultyRating";
 import OverflowMenu from "./OverflowMenu";
+import TaskTimerControls from "./TaskTimerControls";
 import { formatDuration } from "../utils/format-duration";
 
 export interface TaskCardProps {
@@ -14,6 +15,12 @@ export interface TaskCardProps {
   onMarkComplete?: (taskId: string) => void;
   /** All tasks in the session, used for dependency label lookup */
   allTasks: AnalyzedTask[];
+  // Timer props
+  timerStatus?: "running" | "paused" | "none";
+  elapsedMs?: number;
+  onStartTimer?: (taskId: string) => void;
+  onPauseTimer?: () => void;
+  onResumeTimer?: () => void;
 }
 
 /**
@@ -32,6 +39,11 @@ export default function TaskCard({
   isCompleted,
   onMarkComplete,
   allTasks,
+  timerStatus,
+  elapsedMs,
+  onStartTimer,
+  onPauseTimer,
+  onResumeTimer,
 }: TaskCardProps) {
   const { metrics } = task;
   const hasDependencies = metrics.dependsOn.length > 0;
@@ -144,6 +156,18 @@ export default function TaskCard({
           <span data-testid="dependency-item">None</span>
         )}
       </div>
+
+      {/* Timer controls */}
+      <TaskTimerControls
+        taskId={task.id}
+        timerStatus={timerStatus ?? "none"}
+        elapsedMs={elapsedMs ?? 0}
+        isCompleted={isCompleted}
+        onStart={onStartTimer ?? (() => {})}
+        onPause={onPauseTimer ?? (() => {})}
+        onResume={onResumeTimer ?? (() => {})}
+        onComplete={onMarkComplete ?? (() => {})}
+      />
     </div>
   );
 }
