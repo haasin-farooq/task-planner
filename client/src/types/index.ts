@@ -177,6 +177,128 @@ export interface OverrunTask {
   overrunMinutes: number;
 }
 
+// --- New analytics types ---
+
+/** Time allocation breakdown by category */
+export interface TimeAllocationEntry {
+  category: string;
+  totalActualTime: number;
+  totalEstimatedTime: number;
+  percentOfTotal: number;
+  taskCount: number;
+}
+
+/** Estimation error details */
+export interface EstimationErrorStats {
+  avgErrorPercent: number;
+  overestimationCount: number;
+  underestimationCount: number;
+  biggestOverruns: OverrunTask[];
+  biggestUnderruns: {
+    description: string;
+    estimatedTime: number;
+    actualTime: number;
+    savedMinutes: number;
+  }[];
+  errorByCategory: {
+    category: string;
+    avgErrorPercent: number;
+    sampleSize: number;
+  }[];
+}
+
+/** Day-of-week pattern entry */
+export interface DayOfWeekPattern {
+  dayName: string;
+  dayIndex: number;
+  tasksCompleted: number;
+  avgActualTime: number;
+  avgEstimatedTime: number;
+  estimationAccuracy: number;
+}
+
+/** Category speed insight */
+export interface CategorySpeedInsight {
+  category: string;
+  avgActualTime: number;
+  avgEstimatedTime: number;
+  avgRatio: number;
+  sampleSize: number;
+}
+
+/** AI learning progress for a category */
+export interface CategoryLearningStatus {
+  category: string;
+  sampleSize: number;
+  maturity: "new" | "learning" | "ready";
+  hasPersonalization: boolean;
+  recentAccuracyTrend: "improving" | "stable" | "declining" | "insufficient";
+}
+
+/** Productivity consistency metrics */
+export interface ProductivityConsistency {
+  weeklyScores: {
+    weekStart: string;
+    tasksCompleted: number;
+    totalTime: number;
+  }[];
+  avgWeeklyTasks: number;
+  taskVariancePercent: number;
+  consistencyLabel:
+    | "very-consistent"
+    | "consistent"
+    | "variable"
+    | "highly-variable";
+}
+
+/** An anomalous task or category */
+export interface AnomalyEntry {
+  type: "slow-task" | "category-spike" | "unusual-duration";
+  description: string;
+  category: string;
+  actualTime: number;
+  expectedTime: number;
+  deviationPercent: number;
+  completedAt: string;
+}
+
+/** Period comparison data */
+export interface PeriodComparison {
+  current: {
+    tasksCompleted: number;
+    totalActualTime: number;
+    avgActualTime: number;
+    estimationAccuracy: number;
+  };
+  previous: {
+    tasksCompleted: number;
+    totalActualTime: number;
+    avgActualTime: number;
+    estimationAccuracy: number;
+  };
+  deltas: {
+    tasksCompleted: number;
+    totalActualTime: number;
+    avgActualTime: number;
+    estimationAccuracy: number;
+  };
+  mostChangedCategory: { category: string; changePercent: number } | null;
+}
+
+/** Actionable recommendation */
+export interface Recommendation {
+  id: string;
+  text: string;
+  type:
+    | "buffer"
+    | "improvement"
+    | "overestimation"
+    | "consistency"
+    | "learning";
+  category?: string;
+  priority: "high" | "medium" | "low";
+}
+
 /** Extended analytics summary — superset of AnalyticsSummary */
 export interface ExtendedAnalyticsSummary extends AnalyticsSummary {
   // New fields (all optional for backward compatibility)
@@ -212,4 +334,18 @@ export interface ExtendedAnalyticsSummary extends AnalyticsSummary {
     weeksOfData: number;
     daysOfData: number;
   };
+  timeAllocation?: TimeAllocationEntry[];
+  estimationErrors?: EstimationErrorStats;
+  dayOfWeekPatterns?: DayOfWeekPattern[];
+  speedInsights?: {
+    fastest: CategorySpeedInsight[];
+    slowest: CategorySpeedInsight[];
+    quickWins: CategorySpeedInsight[];
+    consistentOverruns: CategorySpeedInsight[];
+  };
+  aiLearningProgress?: CategoryLearningStatus[];
+  productivityConsistency?: ProductivityConsistency;
+  anomalies?: AnomalyEntry[];
+  periodComparison?: PeriodComparison;
+  recommendations?: Recommendation[];
 }
